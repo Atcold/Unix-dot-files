@@ -1,0 +1,77 @@
+syntax enable
+filetype indent on
+
+"set autoindent
+set smartindent
+set number 
+set background=dark
+set path=./**,../**,./modules/**,./testers/**,./SourceCode/**
+set ruler
+set laststatus=2
+
+map  :w!<CR>:!aspell check %<CR>:e! %<CR>
+
+"Easy split navigation
+map <C-h> <C-W>h
+map <C-j> <C-W>j
+map <C-k> <C-W>k
+map <C-l> <C-W>l
+
+"Improve up/down movement on wrapped lines
+nnoremap j gj
+nnoremap k gk
+
+"Use jk as <Esc> alternative
+inoremap jk <Esc>
+
+
+":au BufWinEnter *.v let w:m1=matchadd('Search', '\%<200v.\%>80v', -1)
+:au BufWinEnter *.v let w:m1=matchadd('Search', '\%>101v', -1)
+:autocmd BufNewFile,BufRead *.v setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
+:autocmd BufNewFile,BufRead *.lua setlocal expandtab tabstop=3 shiftwidth=3 softtabstop=3
+:autocmd BufNewFile,BufRead *.c setlocal expandtab tabstop=4 shiftwidth=2 softtabstop=2
+:autocmd BufNewFile,BufRead *.m setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
+
+":colorscheme ir_black
+
+"augroup cpp 
+"autocmd! 
+"autocmd BufNewFile,BufRead *.cpp set expandtab tabstop=4 shiftwidth=4 softtabstop=4 
+"augroup END 
+
+
+"set tabstop=4
+"set shiftwidth=4
+"set expandtab
+setlocal tabstop=8
+setlocal shiftwidth=8
+setlocal noexpandtab 
+
+"setlocal 
+"set
+
+"colorscheme ir_black
+set statusline=%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
+
+if has('gui_running')
+	set background=light
+else
+	set background=dark
+endif
+set t_Co=16
+let g:solarized_termcolors=16
+colorscheme solarized
+
+" Show tabs and trailing spaces.
+" Ctrl-K >> for »
+" Ctrl-K .M for ·
+" (use :dig for list of digraphs)
+set list listchars=tab:»-,trail:·
+:autocmd BufNewFile,BufRead *.v setlocal list listchars=tab:»-,trail:·
+
+
+" experiment for paste http://userobsessed.net/tips-and-tricks/2011/05/10/copy-and-paste-in-vim/
+"<C-O>:set paste <CR><C-r>*<C-O>:set nopaste<CR>
+"imap <Leader>v  <C-O>:set paste<CR><C-r>*<C-O>:set nopaste<CR>
+
+set go-=L
