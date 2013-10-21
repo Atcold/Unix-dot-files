@@ -24,8 +24,8 @@ Rename the containing files and/or folders adding a dot `.` at the beginning of 
 for i in * ; do mv $i .$i ; done
 ```
 
-And then move them to your home folder
+And then copy them (recursively) to your home folder
 
 ```bash
-mv .??* ~
+cp -r .??* ~
 ```
