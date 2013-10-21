@@ -18,14 +18,8 @@ cd Unix-dot-files
 cd Vim
 ```
 
-Rename the containing files and/or folders adding a dot `.` at the beginning of their name
+Copy the containing files and/or folders, adding a dot `.` at the beginning of their name, to your home folder `~`
 
 ```bash
-for i in * ; do mv $i .$i ; done
-```
-
-And then copy them (recursively) to your home folder
-
-```bash
-cp -r .??* ~
+for i in * ; do cp -r $i ~/.$i ; done
 ```
