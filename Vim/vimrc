@@ -75,3 +75,6 @@ set list listchars=tab:»-,trail:·
 "imap <Leader>v  <C-O>:set paste<CR><C-r>*<C-O>:set nopaste<CR>
 
 set go-=L
+
+" associate *.rockspec with lua filetype         
+au BufRead,BufNewFile *.rockspec set filetype=lua
