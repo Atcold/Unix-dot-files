@@ -78,3 +78,4 @@ set go-=L
 
 " associate *.rockspec with lua filetype         
 au BufRead,BufNewFile *.rockspec set filetype=lua
+au BufRead,BufNewFile *.md       set filetype=markdown
