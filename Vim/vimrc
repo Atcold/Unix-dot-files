@@ -79,3 +79,6 @@ set go-=L
 " associate *.rockspec with lua filetype         
 au BufRead,BufNewFile *.rockspec set filetype=lua
 au BufRead,BufNewFile *.md       set filetype=markdown
+
+" Clean all trailing white-spaces upon saving
+autocmd BufWritePre * :%s/\s\+$//e
