@@ -3,7 +3,7 @@ filetype indent on
 
 "set autoindent
 set smartindent
-set number 
+set number
 set background=dark
 set path=./**,../**,./modules/**,./testers/**,./SourceCode/**
 set ruler
@@ -34,10 +34,10 @@ inoremap jk <Esc>
 
 ":colorscheme ir_black
 
-"augroup cpp 
-"autocmd! 
-"autocmd BufNewFile,BufRead *.cpp set expandtab tabstop=4 shiftwidth=4 softtabstop=4 
-"augroup END 
+"augroup cpp
+"autocmd!
+"autocmd BufNewFile,BufRead *.cpp set expandtab tabstop=4 shiftwidth=4 softtabstop=4
+"augroup END
 
 
 "set tabstop=4
@@ -45,18 +45,18 @@ inoremap jk <Esc>
 "set expandtab
 setlocal tabstop=8
 setlocal shiftwidth=8
-setlocal noexpandtab 
+setlocal noexpandtab
 
-"setlocal 
+"setlocal
 "set
 
 "colorscheme ir_black
 set statusline=%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 
 if has('gui_running')
-	set background=light
+   set background=light
 else
-	set background=dark
+   set background=dark
 endif
 set t_Co=16
 let g:solarized_termcolors=16
@@ -76,7 +76,7 @@ set list listchars=tab:»-,trail:·
 
 set go-=L
 
-" associate *.rockspec with lua filetype         
+" associate *.rockspec with lua filetype
 au BufRead,BufNewFile *.rockspec set filetype=lua
 au BufRead,BufNewFile *.md       set filetype=markdown
 
