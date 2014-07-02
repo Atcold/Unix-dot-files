@@ -1,0 +1,11 @@
+[color]
+	ui = true
+[user]
+	name = Alfredo Canziani
+	email = alfredo.canziani@gmail.com
+[push]
+	default = simple
+[alias]
+	lg1 = log --graph --abbrev-commit --decorate --date=relative --format=format:'%C(blue)%h%C(reset) - %C(green)(%ar)%C(reset) %C(bold blue)%s%C(reset) %C(bold green)- %an%C(reset)%C(bold red)%d%C(reset)' --all
+	lg2 = log --graph --abbrev-commit --decorate --format=format:'%C(blue)%h%C(reset) - %C(cyan)%aD%C(reset) %C(green)(%ar)%C(reset)%C(bold red)%d%C(reset)%n''          %C(bold blue)%s%C(reset) %C(bold green)- %an%C(reset)' --all
+	wdiff = diff --color-words
