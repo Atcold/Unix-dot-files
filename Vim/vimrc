@@ -82,3 +82,6 @@ au BufRead,BufNewFile *.md       set filetype=markdown
 
 " Clean all trailing white-spaces upon saving
 autocmd BufWritePre * :%s/\s\+$//e
+
+" On new Mac's Vim <backspace> does not delete
+set backspace=indent,eol,start
