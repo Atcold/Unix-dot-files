@@ -85,3 +85,6 @@ autocmd BufWritePre * :%s/\s\+$//e
 
 " On new Mac's Vim <backspace> does not delete
 set backspace=indent,eol,start
+
+" Set HighLight Search by default. :noh for toggling
+set hls
