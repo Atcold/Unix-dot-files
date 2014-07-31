@@ -88,3 +88,7 @@ set backspace=indent,eol,start
 
 " Set HighLight Search by default. :noh for toggling
 set hls
+
+" Shows when you go over 80 characters per line
+highlight OverLength ctermbg=darkgrey ctermfg=white guibg=#592929
+match OverLength /\%81v.\+/
