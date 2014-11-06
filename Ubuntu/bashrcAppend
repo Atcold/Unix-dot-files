@@ -1,0 +1,41 @@
+
+# My customisation #############################################################
+
+# Some useful EXPORTS
+export ECN='ecn.purdue.edu'
+export GPU0='elab-GPU0.'$ECN
+export GPU1='elab-GPU1.'$ECN
+export GPU2='elab-GPU2.'$ECN
+export GPU3='elab-GPU3.'$ECN
+export GPU4='elab-GPU4.'$ECN
+export ELAB='elab.'$ECN
+export MYELAB='acanzian@'$ELAB
+export EDITOR='vim'
+
+# and corresponding ALIAS
+alias GPU0='ssh $GPU0'
+alias GPU1='ssh $GPU1'
+alias GPU2='ssh $GPU2'
+alias GPU3='ssh $GPU3'
+alias GPU4='ssh $GPU4'
+alias Elab='ssh $MYELAB'
+alias GPU0x='ssh -X $GPU0'
+alias GPU1x='ssh -X $GPU1'
+alias GPU2x='ssh -X $GPU2'
+alias GPU3x='ssh -X $GPU3'
+alias GPU4x='ssh -X $GPU4'
+alias Elabx='ssh -X $MYELAB'
+
+# Some more useful ALIAS
+alias ll='ls -l' # overwrite Ubuntu's ll
+alias tmux='TERM=xterm-256color /usr/bin/tmux'
+
+# Git stuff
+function parse_git_dirty {
+  [[ $(git status 2> /dev/null | tail -n1) != "nothing to commit (working directory clean)" ]] && echo "*"
+}
+function parse_git_branch {
+    git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
+}
+export PS1='\u@\h \[\033[1;33m\]\w\[\033[0m\] $(parse_git_branch)$ '
+alias log='git log --graph --decorate'
