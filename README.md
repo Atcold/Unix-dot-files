@@ -59,7 +59,7 @@ gconftool-2 -s -t bool   /apps/gnome-terminal/profiles/Default/use_theme_backgro
 gconftool-2 -s -t bool   /apps/gnome-terminal/profiles/Default/use_theme_colors false
 gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/background_color '#000000000000'
 gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/foreground_color '#808080808080'
-gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          '#404040404040:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#1D1D1D1D1D1D:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
+gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          '#141414141414:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#1D1D1D1D1D1D:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
 ```
 
 ### Guake
@@ -67,7 +67,7 @@ gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          
 ```bash
 gconftool-2 -s -t string /apps/guake/style/background/color '#000000000000'
 gconftool-2 -s -t string /apps/guake/style/font/color       '#808080808080'
-gconftool-2 -s -t string /apps/guake/style/font/palette     '#404040404040:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#1D1D1D1D1D1D:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
+gconftool-2 -s -t string /apps/guake/style/font/palette     '#141414141414:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#1D1D1D1D1D1D:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
 ```
 
 ## MacOS
