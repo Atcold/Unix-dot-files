@@ -1,5 +1,7 @@
 echo 'Installing Vim configurations'
 
+rm -rf vim/bundle
+rm -rf ~/.vim*
 mkdir vim/bundle
 git clone --quiet https://github.com/VundleVim/Vundle.vim.git vim/bundle/Vundle.vim
 ln -s $(pwd)/vimrc $HOME/.vimrc
