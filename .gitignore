@@ -1,0 +1,3 @@
+# Ignoring Vim's Vundle
+/Vim/vim/bundle/
+Vim/vim/.netrwhist
