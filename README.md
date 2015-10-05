@@ -3,6 +3,7 @@
 This repository aims to achieve the highest beauty in terms of Unix configuration dot-files.
 This goal is not too ambitious since we are starting from my personal settings (he, he, he :wink:) which could be improved with forking and pull-requesting further updates.
 
+
 ## "Installation" instructions
 
 Clone the repository
@@ -16,31 +17,21 @@ Then, after having chosen the subfolder of interest (say for example [`Vim`](htt
 ```bash
 cd Unix-dot-files
 cd Vim
+./install.sh
 ```
 
-Copy the containing files and/or folders, adding a dot `.` at the beginning of their name, to your home folder `~`
+Don't forget to backup your previous configuration, since it will be overwritten.
 
-```bash
-for i in * ; do cp -r $i ~/.$i ; done
-```
-
-### Installing *Ubuntu* `bashrc`
-
-For what concerns *Ubuntu* `bashrc` installation, we need in this case only to append the additional configuration. Therefore,
-
-```bash
-cd Unix-dot-files
-cd Ubuntu
-cat bashrcAppend >> ~/.bashrc
-```
 
 # Solarized colour scheme
 
 Let's give to our *Unix* some pretty colours!
 
+
 ## Ubuntu
 
-The colour settings for [*Ubuntu*'s *Terminal*](https://help.ubuntu.com/community/UsingTheTerminal) and [*Guake*](http://guake.org/) (full screen terminal) can be tweaked in order to mirror the awesome [*Solarized*](http://ethanschoonover.com/solarized) project.
+The colour settings for [*Ubuntu*'s *Terminal*](https://help.ubuntu.com/community/UsingTheTerminal) can be tweaked in order to mirror the awesome [*Solarized*](http://ethanschoonover.com/solarized) project.
+
 
 ### `ls` folders and files
 
@@ -62,21 +53,16 @@ gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/foreground_color 
 gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          '#141414141414:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#303030303030:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
 ```
 
-### Guake
-
-```bash
-gconftool-2 -s -t string /apps/guake/style/background/color '#000000000000'
-gconftool-2 -s -t string /apps/guake/style/font/color       '#808080808080'
-gconftool-2 -s -t string /apps/guake/style/font/palette     '#141414141414:#DCDC32322F2F:#858599990000:#B5B589890000:#26268B8BD2D2:#D3D336368282:#2A2AA1A19898:#E4E4E4E4E4E4:#303030303030:#CBCB4B4B1616:#585858585858:#626262626262:#808080808080:#6C6C7171C4C4:#8A8A8A8A8A8A:#FFFFFFFFD7D7'
-```
 
 ## MacOS
 
 In order to customise your *Terminal* (or *TotalTerminal*) application, you can simply import the file `Solarized Dark by Atcold.terminal` you can find in the folder `Mac-TotalTerminal` and set it as default.
 
+
 # Substituting `<Caps Lock>` with `<Ctrl>`
 
 Since you will never use you `<Caps Lock>` key, let's get another `<Ctrl>` available, handy for our left pinkie when writing code in *Vim*.
+
 
 ## Ubuntu
 
