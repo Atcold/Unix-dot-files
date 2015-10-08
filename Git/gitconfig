@@ -10,9 +10,8 @@
     old = red bold
     new = green bold
 [color "status"]
-    added = yellow bold
-    changed = green bold
-    untracked = cyan bold
+    added = green bold
+    changed = red bold
 [user]
     name = Alfredo Canziani
     email = alfredo.canziani@gmail.com
