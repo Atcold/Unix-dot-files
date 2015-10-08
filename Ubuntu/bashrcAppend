@@ -4,7 +4,6 @@
 # Use Vim key binding in Bash and editor
 set -o vi
 export EDITOR="vim"
-export TERM=xterm-256color
 
 # Some useful EXPORTS
 export ECN='ecn.purdue.edu'
@@ -15,7 +14,6 @@ export GPU3='elab-GPU3.'$ECN
 export GPU4='elab-GPU4.'$ECN
 export ELAB='elab.'$ECN
 export MYELAB='acanzian@'$ELAB
-export EDITOR='vim'
 
 # and corresponding ALIAS
 alias GPU0='ssh $GPU0'
@@ -34,6 +32,7 @@ alias Elabx='ssh -X $MYELAB'
 # Some more useful ALIAS
 alias ll='ls -l' # overwrite Ubuntu's ll
 alias tmux='TERM=xterm-256color /usr/bin/tmux'
+alias vim='TERM=xterm-256color /usr/bin/vim'
 
 # Git stuff
 function parse_git_dirty {
