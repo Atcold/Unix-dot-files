@@ -1,4 +1,4 @@
-source ~/.vim/myVundle.vim
+source ~/.vim/myBundle.vim
 syntax enable
 set relativenumber
 
