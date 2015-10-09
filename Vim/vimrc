@@ -5,10 +5,6 @@ set relativenumber
 " Split line (works with delimitMate)
 imap <C-c> <CR><Esc>O
 
-" Improve up/down movement on wrapped lines
-nnoremap j gj
-nnoremap k gk
-
 " Use tabs by default
 set expandtab
 set tabstop=4
