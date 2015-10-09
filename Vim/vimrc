@@ -23,8 +23,8 @@ set statusline=%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 
 " molokai settings """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 colorscheme molokai
-hi diffAdded   ctermbg=NONE ctermfg=46  cterm=NONE guibg=NONE guifg=#00FF00 gui=NONE
-hi diffRemoved ctermbg=NONE ctermfg=196 cterm=NONE guibg=NONE guifg=#FF0000 gui=NONE
+hi diffAdded   ctermbg=NONE ctermfg=10 cterm=NONE guibg=NONE guifg=#B9FC32 gui=NONE
+hi diffRemoved ctermbg=NONE ctermfg=9  cterm=NONE guibg=NONE guifg=#FF2676 gui=NONE
 hi link diffLine String
 hi link diffSubname Normal
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
