@@ -22,6 +22,8 @@ cd Vim
 
 Don't forget to backup your previous configuration, since it will be overwritten.
 
+Installation is required once only. Then you will simply need to pull in any new update.
+
 
 # Better colours
 
