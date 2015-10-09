@@ -2,5 +2,5 @@
 gconftool-2 -s -t bool   /apps/gnome-terminal/profiles/Default/use_theme_background false
 gconftool-2 -s -t bool   /apps/gnome-terminal/profiles/Default/use_theme_colors false
 gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/background_color '#121212121212'
-gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/foreground_color '#c5c5c8c8c6c6'
-gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          '#28282a2a2e2e:#8c8c38383838:#73737a7a3535:#c4c483835454:#51516d6d8585:#6d6d54547575:#4d4d73736e6e:#59595f5f6666:#37373b3b4141:#cccc66666666:#b5b5bdbd6868:#f0f0c6c67474:#8181a2a2bebe:#b2b29494bbbb:#8a8abebeb7b7:#c5c5c8c8c6c6'
+gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/foreground_color '#f1f1ebebebeb'
+gconftool-2 -s -t string /apps/gnome-terminal/profiles/Default/palette          '#484848483e3e:#dcdc25256666:#8f8fc0c02929:#d4d4c9c96e6e:#5555bcbccece:#93935858fefe:#5656b7b7a5a5:#acacadada1a1:#8f8f89897272:#ffff26267676:#b9b9fcfc3232:#fffff7f78080:#6b6be9e9ffff:#aeae8282ffff:#6b6bffffe4e4:#eaeaebebdada'
