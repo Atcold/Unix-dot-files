@@ -1,6 +1,8 @@
 echo 'Installing Bash configurations'
 
-cat bashrcAppend >> ~/.bashrc
+echo ''                            >> ~/.bashrc
+echo '# My configurations'         >> ~/.bashrc
+echo source $(pwd)/bashrcAppend.sh >> ~/.bashrc
 ./fix_colours.sh
 
 echo 'Done.'
