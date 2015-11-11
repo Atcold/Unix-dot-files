@@ -1,5 +1,6 @@
 source ~/.vim/myBundle.vim
 syntax enable
+set number
 set relativenumber
 
 " Split line (works with delimitMate)
