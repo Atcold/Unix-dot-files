@@ -28,6 +28,7 @@ hi diffAdded   ctermbg=NONE ctermfg=10 cterm=NONE guibg=NONE guifg=#B9FC32 gui=N
 hi diffRemoved ctermbg=NONE ctermfg=9  cterm=NONE guibg=NONE guifg=#FF2676 gui=NONE
 hi link diffLine String
 hi link diffSubname Normal
+setlocal colorcolumn=81
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Show tabs and trailing spaces.
