@@ -2,6 +2,7 @@ source ~/.vim/myBundle.vim
 syntax enable
 set number
 set relativenumber
+set nowrap
 
 " Split line (works with delimitMate)
 imap <C-c> <CR><Esc>O
