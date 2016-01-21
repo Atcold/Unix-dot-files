@@ -9,6 +9,10 @@ export GPU1='elab-GPU1.'$ECN
 export GPU2='elab-GPU2.'$ECN
 export GPU3='elab-GPU3.'$ECN
 export GPU4='elab-GPU4.'$ECN
+export GPU5='elab-GPU5.'$ECN
+export GPU6='elab-GPU6.'$ECN
+export GPU7='elab-GPU7.'$ECN
+export GPU8='elab-GPU8.'$ECN
 export ELAB='elab.'$ECN
 export MYELAB='acanzian@'$ELAB
 
@@ -18,12 +22,20 @@ alias GPU1='ssh $GPU1'
 alias GPU2='ssh $GPU2'
 alias GPU3='ssh $GPU3'
 alias GPU4='ssh $GPU4'
+alias GPU5='ssh $GPU5'
+alias GPU6='ssh $GPU6'
+alias GPU7='ssh $GPU7'
+alias GPU8='ssh $GPU8'
 alias Elab='ssh $MYELAB'
 alias GPU0x='ssh -X $GPU0'
 alias GPU1x='ssh -X $GPU1'
 alias GPU2x='ssh -X $GPU2'
 alias GPU3x='ssh -X $GPU3'
 alias GPU4x='ssh -X $GPU4'
+alias GPU5x='ssh -X $GPU5'
+alias GPU6x='ssh -X $GPU6'
+alias GPU7x='ssh -X $GPU7'
+alias GPU8x='ssh -X $GPU8'
 alias Elabx='ssh -X $MYELAB'
 
 # Some more useful ALIAS
