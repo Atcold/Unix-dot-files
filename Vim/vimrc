@@ -33,6 +33,7 @@ setlocal colorcolumn=81
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Show tabs and trailing spaces.
+set encoding=utf-8
 set list listchars=tab:▸\ ,trail:·
 
 " Unrecogised extensions fix
