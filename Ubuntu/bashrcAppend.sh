@@ -60,3 +60,7 @@ export LESS_TERMCAP_se=$(printf '\e[0m') # leave standout mode
 export LESS_TERMCAP_so=$(printf '\e[01;33m') # enter standout mode – yellow
 export LESS_TERMCAP_ue=$(printf '\e[0m') # leave underline mode
 export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
+
+# CUDA
+PATH=$PATH':/usr/local/cuda/bin'
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
