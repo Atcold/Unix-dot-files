@@ -62,5 +62,5 @@ export LESS_TERMCAP_ue=$(printf '\e[0m') # leave underline mode
 export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 
 # CUDA
-PATH=$PATH':/usr/local/cuda/bin'
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
+export PATH=$PATH':/usr/local/cuda/bin'
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
