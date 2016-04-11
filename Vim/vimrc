@@ -48,3 +48,14 @@ set hls
 
 " Wildmenu
 set wildmenu
+
+" Automatically switch between syntax and manual foldmethod
+autocmd BufNewFile,BufRead *.{java,c} setlocal foldmethod=syntax foldcolumn=4
+autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
+autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
+
+" TeX settings
+autocmd BufNewFile,BufRead *.{tex,bib} setlocal colorcolumn=0 norelativenumber wrap autowrite
+
+" C-Return to send below
+let delimitMate_expand_cr=1
