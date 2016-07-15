@@ -16,7 +16,7 @@ set softtabstop=4
 " Use specific spacing for different formats
 autocmd BufNewFile,BufRead *.v   setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
 autocmd BufNewFile,BufRead *.lua setlocal expandtab tabstop=3 shiftwidth=3 softtabstop=3
-autocmd BufNewFile,BufRead *.c   setlocal expandtab tabstop=4 shiftwidth=2 softtabstop=2
+autocmd BufNewFile,BufRead *.{c,tex,bib}   setlocal expandtab tabstop=4 shiftwidth=2 softtabstop=2
 autocmd BufNewFile,BufRead *.m   setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
 
 " Status bar formatting
@@ -50,12 +50,16 @@ set hls
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
-autocmd BufNewFile,BufRead *.{java,c} setlocal foldmethod=syntax foldcolumn=4
+autocmd BufNewFile,BufRead *.{java,c} setlocal foldmethod=syntax foldcolumn=4 autowrite
 autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 
 " TeX settings
-autocmd BufNewFile,BufRead *.{tex,bib} setlocal colorcolumn=0 norelativenumber wrap autowrite
+autocmd BufNewFile,BufRead *.{tex,bib} setlocal colorcolumn=0 wrap autowrite
+let g:tex_flavor = "latex"
 
 " C-Return to send below
 let delimitMate_expand_cr=1
+
+let delimitMate_quotes = '"'
+let delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
