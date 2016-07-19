@@ -50,16 +50,15 @@ set hls
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
-autocmd BufNewFile,BufRead *.{java,c} setlocal foldmethod=syntax foldcolumn=4 autowrite
+au FileType java,c,bib setlocal foldmethod=syntax foldcolumn=4 autowrite
 autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 
 " TeX settings
-autocmd BufNewFile,BufRead *.{tex,bib} setlocal colorcolumn=0 wrap autowrite
 let g:tex_flavor = "latex"
+au FileType tex,bib setlocal colorcolumn=0 wrap autowrite foldmethod=syntax
+au FileType tex,bib let b:delimitMate_quotes = '"'
+au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 
-" C-Return to send below
-let delimitMate_expand_cr=1
-
-let delimitMate_quotes = '"'
-let delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
+" Expand <CR>
+let delimitMate_expand_cr = 1
