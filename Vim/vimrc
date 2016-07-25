@@ -57,8 +57,9 @@ autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 " TeX settings
 let g:tex_flavor = "latex"
 au FileType tex,bib setlocal colorcolumn=0 wrap autowrite foldmethod=syntax
-au FileType tex,bib let b:delimitMate_quotes = '"'
+au FileType tex,bib let b:delimitMate_quotes = '$'
 au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
+au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
