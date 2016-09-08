@@ -32,6 +32,7 @@ hi diffAdded   ctermbg=NONE ctermfg=10 cterm=NONE guibg=NONE guifg=#B9FC32 gui=N
 hi diffRemoved ctermbg=NONE ctermfg=9  cterm=NONE guibg=NONE guifg=#FF2676 gui=NONE
 hi link diffLine String
 hi link diffSubname Normal
+set textwidth=80
 set colorcolumn=81
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
@@ -59,7 +60,7 @@ autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 
 " TeX settings
 let g:tex_flavor = "latex"
-au FileType tex,bib setlocal colorcolumn=0 wrap autowrite foldmethod=syntax
+au FileType tex,bib setlocal colorcolumn=0 wrap autowrite foldmethod=syntax textwidth=0
 au FileType tex,bib let b:delimitMate_quotes = '$'
 au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
