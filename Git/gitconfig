@@ -20,5 +20,5 @@
 [alias]
     lg1 = log --graph --abbrev-commit --decorate --date=relative --format=format:'%C(blue)%h%C(reset) - %C(reset)%s%C(reset) %C(green)(%ar)%C(reset) %C(dim white)- %an%C(reset)%C(red)%d%C(reset)' --all
     lg2 = log --graph --abbrev-commit --decorate --format=format:'%C(blue)%h%C(reset) - %C(cyan)%aD%C(reset) %C(green)(%ar)%C(reset)%C(red)%d%C(reset)%n''          %C(reset)%s%C(reset) %C(dim white)- %an%C(reset)' --all
-    wdiff = diff --color-words
+    wdiff = diff --word-diff
     s = status -sb
