@@ -14,10 +14,13 @@ set shiftwidth=4
 set softtabstop=4
 
 " Use specific spacing for different formats
-autocmd BufNewFile,BufRead *.v   setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
-autocmd BufNewFile,BufRead *.lua setlocal expandtab tabstop=3 shiftwidth=3 softtabstop=3
-autocmd BufNewFile,BufRead *.{c,tex,bib}   setlocal expandtab tabstop=4 shiftwidth=2 softtabstop=2
-autocmd BufNewFile,BufRead *.m   setlocal expandtab tabstop=4 shiftwidth=4 softtabstop=4
+" expandtab, et:    <Tab> -> spaces
+" tabstop, ts:      length of a <Tab>
+" shiftwidth, sw:   spaces for autoindent
+" softtabstop, sts: how many spaces a <Tab> inserts or <BS> removes
+au FileType verilog,matlab setl et ts=4 sw=4 sts=4
+au FileType lua setl et ts=3 sw=3 sts=2
+au FileType c,cuda,tex,bib setl et ts=4 sw=2 sts=2
 
 " Status bar formatting
 set laststatus=2
