@@ -19,7 +19,7 @@ au FileType c,cuda,tex,bib setl et ts=2 sw=2 sts=2
 
 " Status bar formatting
 set laststatus=2
-set statusline=%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
+set statusline=[%n]%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 
 " molokai settings """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 colorscheme molokai
