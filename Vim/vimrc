@@ -36,8 +36,8 @@ set encoding=utf-8
 set list listchars=tab:▸\ ,trail:·
 
 " Unrecogised extensions fix
-au BufRead,BufNewFile *.rockspec set filetype=lua
-au BufRead,BufNewFile *.md       set filetype=markdown
+au BufRead,BufNewFile *.rockspec setl filetype=lua
+au BufRead,BufNewFile *.md       setl filetype=markdown tw=0 cc=0
 
 " Ask to clean all trailing white-spaces upon saving
 autocmd BufWritePre * :%s/\s\+$//ec
