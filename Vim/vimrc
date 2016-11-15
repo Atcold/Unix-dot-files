@@ -4,9 +4,6 @@ set number
 set relativenumber
 set nowrap
 
-" Split line (works with delimitMate)
-imap <C-c> <CR><Esc>O
-
 " Use specific spacing for different formats
 " expandtab, et:    <Tab> -> spaces
 " tabstop, ts:      length of a <Tab>
