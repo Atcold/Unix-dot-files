@@ -7,20 +7,15 @@ set nowrap
 " Split line (works with delimitMate)
 imap <C-c> <CR><Esc>O
 
-" Use tabs by default
-set expandtab
-set tabstop=4
-set shiftwidth=4
-set softtabstop=4
-
 " Use specific spacing for different formats
 " expandtab, et:    <Tab> -> spaces
 " tabstop, ts:      length of a <Tab>
 " shiftwidth, sw:   spaces for autoindent
 " softtabstop, sts: how many spaces a <Tab> inserts or <BS> removes
+set et ts=4 sw=4 sts=4
 au FileType verilog,matlab setl et ts=4 sw=4 sts=4
-au FileType lua setl et ts=3 sw=3 sts=2
-au FileType c,cuda,tex,bib setl et ts=4 sw=2 sts=2
+au FileType lua setl et ts=3 sw=3 sts=3
+au FileType c,cuda,tex,bib setl et ts=2 sw=2 sts=2
 
 " Status bar formatting
 set laststatus=2
@@ -30,10 +25,10 @@ set statusline=%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 colorscheme molokai
 hi diffAdded   ctermbg=NONE ctermfg=10 cterm=NONE guibg=NONE guifg=#B9FC32 gui=NONE
 hi diffRemoved ctermbg=NONE ctermfg=9  cterm=NONE guibg=NONE guifg=#FF2676 gui=NONE
+hi Conceal ctermbg=NONE guibg=NONE
 hi link diffLine String
 hi link diffSubname Normal
-set textwidth=80
-set colorcolumn=81
+set textwidth=80 colorcolumn=81 cursorline
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Show tabs and trailing spaces.
@@ -54,13 +49,13 @@ set hls
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
-au FileType java,c,bib setlocal foldmethod=syntax foldcolumn=4 autowrite
+au FileType java,c,bib setlocal fdm=syntax fdc=4 aw
 autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 
 " TeX settings
 let g:tex_flavor = "latex"
-au FileType tex,bib setlocal colorcolumn=0 wrap autowrite foldmethod=syntax textwidth=0
+au FileType tex,bib setlocal cc=0 wrap aw fdm=syntax tw=0 cole=2
 au FileType tex,bib let b:delimitMate_quotes = '$'
 au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
