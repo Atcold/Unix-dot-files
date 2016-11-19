@@ -23,19 +23,14 @@ export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 set -o vi
 export EDITOR="vim"
 
-# Git settings #################################################################
-if [ -f ~/.git-completion.bash ]
+# Essential bash completion
+if [ -f $(brew --prefix)/etc/bash_completion ]
 then
-    source ~/.git-completion.bash
+    source $(brew --prefix)/etc/bash_completion
 fi
 
-# http://henrik.nyh.se/2008/12/git-dirty-prompt
-# http://www.simplisticcomplexity.com/2008/03/13/show-your-git-branch-name-in-your-prompt/
-#   username@Machine ~/dev/dir[master]$   # clean working directory
-#   username@Machine ~/dev/dir[master*]$  # dirty working directory
-
-# osx
-name=`networksetup -getcomputername`
+# Git settings #################################################################
+name=`networksetup -getcomputername` # Only for OSX
 
 function parse_git_dirty {
   [[ $(git status 2> /dev/null | tail -n1) != "nothing to commit (working directory clean)" ]] && echo "*"
@@ -98,4 +93,4 @@ export PATH=$PATH':/usr/local/cuda/bin'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib'
 
 # Torch ########################################################################
-. /Users/atcold/torch/install/bin/torch-activate
+source /Users/atcold/torch/install/bin/torch-activate
