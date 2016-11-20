@@ -41,9 +41,10 @@ If you'd like only to fix the colours, then run `Ubuntu/fix_colours.sh` only.
 In order to customise your *Terminal* (or *TotalTerminal*) application, you can simply import the file `Mac-Terminal/Pastel.terminal` and set it as default.
 
 
-# Substituting `<Caps Lock>` with `<Ctrl>`
+# Substituting <kbd>Caps Lock</kbd> with <kbd>Ctrl</kbd>
 
-Since you will never use you `<Caps Lock>` key, let's get another `<Ctrl>` available, handy for our left pinkie when writing code in *Vim* within *Tmux*. (Remember that `<Esc>` can be obtained by typing `^[`, that is `<Ctrl>`-`[`.)
+Since you will never use your <kbd>Caps Lock</kbd> key, let's get another <kbd>Ctrl</kbd>, handy for our left pinkie when writing code in *Vim* within *Tmux*.
+(Remember that <kbd>Esc</kbd> can be obtained by typing `^[`, that is <kbd>Ctrl</kbd>-<kbd>[</kbd>.)
 
 
 ## Ubuntu
@@ -57,12 +58,12 @@ sudo vim /etc/default/keyboard +/XKBOPTIONS
 and let's set
 
 ```lua
-XKBOPTIONS="ctrl:nocaps"
+XKBOPTIONS="ctrl:nocaps,compose:ralt"
 ```
 
-> To exchange the position of `<Caps Lock>` and `<Ctrl>`, instead
+> To exchange the position of <kbd>Caps Lock</kbd> and <kbd>Ctrl</kbd>, instead
 > ```lua
-> XKBOPTIONS="ctrl:swapcaps"
+> XKBOPTIONS="ctrl:swapcaps,compose:ralt"
 > ```
 
 and, therefore, run
@@ -70,6 +71,10 @@ and, therefore, run
 ```bash
 sudo dpkg-reconfigure keyboard-configuration
 ```
+
+We have also mapped the <kbd>AltGr</kbd> (the <kbd>Alt</kbd> on the right) to the *compose-key*, so that we can write accented letters in Ubuntu.
+For example, we can type an *È* by typing <kbd>AltGr</kbd>-<kbd>`</kbd> <kbd>Shift</kbd>-<kbd>E</kbd>.
+We can type an *é* with <kbd>AltGr</kbd>-<kbd>'</kbd> <kbd>E</kbd>.
 
 
 ## MacOS
