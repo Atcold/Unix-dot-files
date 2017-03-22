@@ -13,6 +13,7 @@ set et ts=4 sw=4 sts=4
 au FileType verilog,matlab setl et ts=4 sw=4 sts=4
 au FileType lua setl et ts=3 sw=3 sts=3
 au FileType c,cuda,tex,bib setl et ts=2 sw=2 sts=2
+au FileType gitcommit setl tw=0 cc=0
 
 " Status bar formatting
 set laststatus=2
@@ -34,7 +35,9 @@ set list listchars=tab:▸\ ,trail:·
 
 " Unrecogised extensions fix
 au BufRead,BufNewFile *.rockspec setl filetype=lua
+au BufRead,BufNewFile *.plt setl filetype=gnuplot
 au BufRead,BufNewFile *.md       setl filetype=markdown tw=0 cc=0
+au BufRead,BufNewFile *.py       setl tw=120 cc=121
 
 " Ask to clean all trailing white-spaces upon saving
 autocmd BufWritePre * :%s/\s\+$//ec
@@ -50,6 +53,10 @@ au FileType java,c,bib setlocal fdm=syntax fdc=4 aw
 autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
 
+" Split current file in two columns
+noremap <silent> <Leader>vs :set noscb<CR>:bo vs<CR>Ljzt:setl scb<CR><C-w>p:setl scb<CR>
+
+" Extensions settings """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " TeX settings
 let g:tex_flavor = "latex"
 au FileType tex,bib setlocal cc=0 wrap aw fdm=syntax tw=0 cole=2
@@ -59,3 +66,4 @@ au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
+let python_highlight_all = 1
