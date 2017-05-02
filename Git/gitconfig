@@ -17,6 +17,8 @@
     email = alfredo.canziani@gmail.com
 [push]
     default = simple
+[merge]
+    tool = vimdiff
 [alias]
     lg  = !"git lg1-specific"
     lg1 = !"git lg1-specific --all"
