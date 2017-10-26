@@ -1,6 +1,9 @@
-echo 'Installing Tmux configurations'
+echo 'Locally installing Tmux and settings'
 
-rm -rf ~/.tmux.conf
-ln -s $(pwd)/tmux.conf $HOME/.tmux.conf
+# Install latest Tmux in $HOME
+./local_install.sh
+
+# Install personal settings
+./conf_settings.sh
 
 echo 'Done.'
