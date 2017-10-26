@@ -66,4 +66,10 @@ au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
-let python_highlight_all = 1
+
+" Enable Python highlight
+let g:python_highlight_all = 1
+
+" Use italic in the terminal
+let &t_ZH="\e[3m"
+let &t_ZR="\e[23m"
