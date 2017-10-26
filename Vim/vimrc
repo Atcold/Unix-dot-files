@@ -27,6 +27,8 @@ hi Conceal ctermbg=NONE guibg=NONE
 hi link diffLine String
 hi link diffSubname Normal
 set textwidth=80 colorcolumn=81 cursorline
+hi LineNr ctermbg=233 ctermfg=240
+hi Search ctermfg=16  ctermbg=141 cterm=bold guifg=#000000 guibg=#AF87FF gui=bold
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Show tabs and trailing spaces.
