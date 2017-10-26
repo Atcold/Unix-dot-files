@@ -61,6 +61,11 @@ export LESS_TERMCAP_so=$(printf '\e[01;33m') # enter standout mode – yellow
 export LESS_TERMCAP_ue=$(printf '\e[0m') # leave underline mode
 export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 
+# Better ls colouring
+if [[ -f /usr/bin/dircolors && -f $HOME/.dir_colors ]]; then
+    eval $(dircolors -b $HOME/.dir_colors)
+fi
+
 # CUDA
 export PATH=$PATH':/usr/local/cuda/bin'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
