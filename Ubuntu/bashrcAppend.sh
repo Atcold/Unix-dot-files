@@ -2,46 +2,29 @@
 set -o vi
 export EDITOR="vim"
 
-# Some useful EXPORTS
-export ECN='ecn.purdue.edu'
-export GPU0='elab-GPU0.'$ECN
-export GPU1='elab-GPU1.'$ECN
-export GPU2='elab-GPU2.'$ECN
-export GPU3='elab-GPU3.'$ECN
-export GPU4='elab-GPU4.'$ECN
-export GPU5='elab-GPU5.'$ECN
-export GPU6='elab-GPU6.'$ECN
-export GPU7='elab-GPU7.'$ECN
-export GPU8='elab-GPU8.'$ECN
-export ELAB='elab.'$ECN
-export MYELAB='acanzian@'$ELAB
-
-# and corresponding ALIAS
-alias GPU0='ssh $GPU0'
-alias GPU1='ssh $GPU1'
-alias GPU2='ssh $GPU2'
-alias GPU3='ssh $GPU3'
-alias GPU4='ssh $GPU4'
-alias GPU5='ssh $GPU5'
-alias GPU6='ssh $GPU6'
-alias GPU7='ssh $GPU7'
-alias GPU8='ssh $GPU8'
-alias Elab='ssh $MYELAB'
-alias GPU0x='ssh -X $GPU0'
-alias GPU1x='ssh -X $GPU1'
-alias GPU2x='ssh -X $GPU2'
-alias GPU3x='ssh -X $GPU3'
-alias GPU4x='ssh -X $GPU4'
-alias GPU5x='ssh -X $GPU5'
-alias GPU6x='ssh -X $GPU6'
-alias GPU7x='ssh -X $GPU7'
-alias GPU8x='ssh -X $GPU8'
-alias Elabx='ssh -X $MYELAB'
-
-# Some more useful ALIAS
+# Some more useful ALIAs
+alias ls='ls --color=auto'
 alias ll='ls -l' # overwrite Ubuntu's ll
+alias l='ls -CF'
+alias l1='l -1'
 alias tmux='TERM=xterm-256color /usr/bin/tmux'
 alias vim='TERM=xterm-256color /usr/bin/vim'
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+alias tree='tree -C'
+# Highlight numbers when displaying text files
+alias v="grep --colour=always -nTP '(?<![\w\.])[-+]?[0-9]*[\.eE]?\-?[0-9]+|$'"
+# Send v output to less
+function lv {
+    v $1 | less -R
+}
+# Convert CSV to TSV and send to lv
+function cv {
+    column -ts, $1 | lv
+}
+unalias mv
+unalias rm
 
 # Git stuff
 function parse_git_dirty {
@@ -50,7 +33,7 @@ function parse_git_dirty {
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
 }
-export PS1='\u@\h \[\033[1;33m\]\w\[\033[0m\] $(parse_git_branch)$ '
+export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]\h \[\e[1;33m\]\w\[\e[0m\] $(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
 
 # Coloured LESS (MAN) pages
 export LESS_TERMCAP_mb=$(printf '\e[01;31m') # enter blinking mode – red
@@ -66,6 +49,29 @@ if [[ -f /usr/bin/dircolors && -f $HOME/.dir_colors ]]; then
     eval $(dircolors -b $HOME/.dir_colors)
 fi
 
-# CUDA
-export PATH=$PATH':/usr/local/cuda/bin'
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
+## CUDA
+#export PATH=$PATH':/usr/local/cuda/bin'
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib64'
+
+# Shortcuts and aliases for NYU and CIMS machines ##############################
+#Some useful EXPORTs
+export NYU='nyu.edu'
+export CIMS='cims.'$NYU
+export CS='cs.'$NYU
+export L1='lion1.'$CS
+export ACCESS="access.$CIMS"
+export MYBOX="box795.$CIMS"
+
+
+# and corresponding ALIAs
+alias L1="ssh $L1"
+alias Access="ssh $ACCESS"
+alias MyBox="ssh $MYBOX"
+
+# with X forwarding
+alias L1X="ssh $L1 -Y"
+alias AccessX="ssh -Y $ACCESS"
+alias MyBoxX="ssh -Y $MYBOX"
+
+# Set correct permissions
+umask 007
