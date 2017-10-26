@@ -30,7 +30,7 @@ then
 fi
 
 # Git settings #################################################################
-name=`networksetup -getcomputername` # Only for OSX
+name=$(networksetup -getcomputername)
 
 function parse_git_dirty {
   [[ $(git status 2> /dev/null | tail -n1) != "nothing to commit (working directory clean)" ]] && echo "*"
@@ -38,55 +38,15 @@ function parse_git_dirty {
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
 }
-export PS1='\u@$name \[\033[1;33m\]\w\[\033[0m\] $(parse_git_branch)$ '
+export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \[\e[1;33m\]\w\[\e[0m\] $(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
+export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
-# Shortcuts for e-Lab machines #################################################
-export ECN='ecn.purdue.edu'
-export WELDON='weldon.'$ECN
-export MYWELDON='acanzian@'$WELDON
-export ELAB='elab.'$ECN
-export MYELAB='acanzian@'$ELAB
-export GPU0='elab-GPU0.'$ECN
-export GPU1='elab-GPU1.'$ECN
-export GPU2='elab-GPU2.'$ECN
-export GPU3='elab-GPU3.'$ECN
-export GPU4='elab-GPU4.'$ECN
-export GPU5='elab-GPU5.'$ECN
-export GPU6='elab-GPU6.'$ECN
-export GPU7='elab-GPU7.'$ECN
-export GPU8='elab-GPU8.'$ECN
-export BRD0='elab-board0.'$ECN
-export BRD1='elab-board1.'$ECN
-export BRD2='elab-board2.'$ECN
+# Shortcuts for CIMS machines ##################################################
+export CIMS='cims.nyu.edu'
+export ACCESS='access.'$CIMS
 
-alias Elabx='ssh -X $MYELAB'
-alias GPU0x='ssh -X $GPU0'
-alias GPU1x='ssh -X $GPU1'
-alias GPU2x='ssh -X $GPU2'
-alias GPU3x='ssh -X $GPU3'
-alias GPU4x='ssh -X $GPU4'
-alias GPU5x='ssh -X $GPU5'
-alias GPU6x='ssh -X $GPU6'
-alias GPU7x='ssh -X $GPU7'
-alias GPU8x='ssh -X $GPU8'
-alias BRD0x='ssh -X ubuntu@$BRD0'
-alias BRD1x='ssh -X ubuntu@$BRD1'
-alias BRD2x='ssh -X ubuntu@$BRD2'
-
-alias Web='ssh $MYWELDON'
-alias Elab='ssh $MYELAB'
-alias GPU0='ssh $GPU0'
-alias GPU1='ssh $GPU1'
-alias GPU2='ssh $GPU2'
-alias GPU3='ssh $GPU3'
-alias GPU4='ssh $GPU4'
-alias GPU5='ssh $GPU5'
-alias GPU6='ssh $GPU6'
-alias GPU7='ssh $GPU7'
-alias GPU8='ssh $GPU8'
-alias BRD0='ssh ubuntu@$BRD0'
-alias BRD1='ssh ubuntu@$BRD1'
-alias BRD2='ssh ubuntu@$BRD2'
+alias Access='ssh '$ACCESS
+alias AccessX='ssh -Y '$ACCESS
 
 # CUDA #########################################################################
 export PATH=$PATH':/usr/local/cuda/bin'
@@ -94,3 +54,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib'
 
 # Torch ########################################################################
 source /Users/atcold/torch/install/bin/torch-activate
+
+# Conda ########################################################################
+export PATH=~/miniconda3/bin:"$PATH"
