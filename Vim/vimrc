@@ -59,10 +59,12 @@ noremap <silent> <Leader>vs :set noscb<CR>:bo vs<CR>Ljzt:setl scb<CR><C-w>p:setl
 " Extensions settings """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " TeX settings
 let g:tex_flavor = "latex"
-au FileType tex,bib setlocal cc=0 wrap aw fdm=syntax tw=0 cole=2
+au FileType tex,bib setlocal cc=0 wrap aw fdm=syntax tw=0 cole=2 lbr spell
 au FileType tex,bib let b:delimitMate_quotes = '$'
 au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
+set spellfile=$HOME/Dropbox/Vim/Dics/en-TeX.utf-8.add
+set spelllang=en_gb
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
