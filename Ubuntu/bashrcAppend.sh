@@ -34,6 +34,7 @@ function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
 }
 export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]\h \[\e[1;33m\]\w\[\e[0m\] $(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
+export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
 # Coloured LESS (MAN) pages
 export LESS_TERMCAP_mb=$(printf '\e[01;31m') # enter blinking mode – red
