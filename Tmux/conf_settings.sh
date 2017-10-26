@@ -1,7 +1,8 @@
 echo 'Installing Tmux configurations'
 
 # installing tmux and tmux-256color terminfo
-tic -x tmux.terminfo
+mkdir -p $HOME/.terminfo
+TERMINFO=$HOME/.terminfo tic -x tmux.terminfo
 
 # Install config.
 rm -rf ~/.tmux.conf
