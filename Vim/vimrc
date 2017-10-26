@@ -77,3 +77,6 @@ let g:python_highlight_all = 1
 " Use italic in the terminal
 let &t_ZH="\e[3m"
 let &t_ZR="\e[23m"
+
+" Configure Vim-Note plugin
+let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
