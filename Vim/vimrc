@@ -78,5 +78,11 @@ let g:python_highlight_all = 1
 let &t_ZH="\e[3m"
 let &t_ZR="\e[23m"
 
+" Vim-indent-guides settings
+let g:indent_guides_enable_on_vim_startup = 1
+let g:indent_guides_auto_colors = 0
+hi IndentGuidesOdd   ctermbg=234 guibg=#262626
+hi IndentGuidesEven  ctermbg=235 guibg=#303030
+
 " Configure Vim-Note plugin
 let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
