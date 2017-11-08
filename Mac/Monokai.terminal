@@ -211,11 +211,15 @@
 	aXZlctEXGFRyb290gAEIERojLTI3O0FITltijY+RlqGqsrW+0NPYAAAAAAAAAQEAAAAA
 	AAAAGQAAAAAAAAAAAAAAAAAAANo=
 	</data>
+	<key>SetLanguageEnvironmentVariables</key>
+	<true/>
 	<key>ShowCommandKeyInTitle</key>
 	<false/>
 	<key>ShowDimensionsInTitle</key>
 	<false/>
 	<key>ShowShellCommandInTitle</key>
+	<false/>
+	<key>StrictVTKeypad</key>
 	<false/>
 	<key>TerminalType</key>
 	<string>xterm-256color</string>
@@ -238,7 +242,7 @@
 	AAAZAAAAAAAAAAAAAAAAAAAA2Q==
 	</data>
 	<key>UseBoldFonts</key>
-	<false/>
+	<true/>
 	<key>UseBrightBold</key>
 	<true/>
 	<key>VisualBellOnlyWhenMuted</key>
