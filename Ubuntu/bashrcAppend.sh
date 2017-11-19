@@ -60,17 +60,31 @@ export NYU='nyu.edu'
 export CIMS='cims.'$NYU
 export CS='cs.'$NYU
 export L1='lion1.'$CS
+export L2='lion2.'$CS
+export L3='lion3.'$CS
+export L4='lion4.'$CS
+export L5='lion5.'$CS
+export L6='lion6.'$CS
 export ACCESS="access.$CIMS"
 export MYBOX="box795.$CIMS"
 
-
 # and corresponding ALIAs
 alias L1="ssh $L1"
+alias L2="ssh $L2"
+alias L3="ssh $L3"
+alias L4="ssh $L4"
+alias L5="ssh $L5"
+alias L6="ssh $L6"
 alias Access="ssh $ACCESS"
 alias MyBox="ssh $MYBOX"
 
 # with X forwarding
 alias L1X="ssh $L1 -Y"
+alias L2X="ssh $L2 -Y"
+alias L3X="ssh $L3 -Y"
+alias L4X="ssh $L4 -Y"
+alias L5X="ssh $L5 -Y"
+alias L6X="ssh $L6 -Y"
 alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 
