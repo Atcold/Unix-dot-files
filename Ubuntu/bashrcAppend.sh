@@ -33,7 +33,8 @@ function parse_git_dirty {
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
 }
-export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]\h \[\e[1;33m\]\w\[\e[0m\] $(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
+export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]\h \
+\[\e[1;33m\]\w\[\e[0m\] \$(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
 export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
 # Coloured LESS (MAN) pages
@@ -67,6 +68,7 @@ export L5='lion5.'$CS
 export L6='lion6.'$CS
 export ACCESS="access.$CIMS"
 export MYBOX="box795.$CIMS"
+export CASSIO="cassio."$CS
 
 # and corresponding ALIAs
 alias L1="ssh $L1"
@@ -77,6 +79,7 @@ alias L5="ssh $L5"
 alias L6="ssh $L6"
 alias Access="ssh $ACCESS"
 alias MyBox="ssh $MYBOX"
+alias Cassio="ssh $CASSIO"
 
 # with X forwarding
 alias L1X="ssh $L1 -Y"
@@ -87,6 +90,7 @@ alias L5X="ssh $L5 -Y"
 alias L6X="ssh $L6 -Y"
 alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
+alias Cassio="ssh -Y $CASSIO"
 
 # Set correct permissions
 umask 007

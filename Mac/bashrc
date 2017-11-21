@@ -38,7 +38,8 @@ function parse_git_dirty {
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/[\1$(parse_git_dirty)]/"
 }
-export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \[\e[1;33m\]\w\[\e[0m\] $(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
+export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \
+\[\e[1;33m\]\w\[\e[0m\] \$(parse_git_branch)\n\[\e[1;32m\]$\[\e[0m\] "
 export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
 # Shortcuts for CIMS machines ##################################################
@@ -79,8 +80,6 @@ alias MyBoxX="ssh -Y $MYBOX"
 export PATH=$PATH':/usr/local/cuda/bin'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib'
 
-# Torch ########################################################################
-source /Users/atcold/torch/install/bin/torch-activate
-
 # Conda ########################################################################
-export PATH=~/miniconda3/bin:"$PATH"
+##export PATH=usr/local/miniconda3/bin:"$PATH"
+export PATH=/usr/local/miniconda3/bin:"$PATH"
