@@ -11,6 +11,7 @@ ln -s $(pwd)/tmux.conf $HOME/.tmux.conf
 # If on Mac, get also Mac specific settings
 if [[ $(uname) == 'Darwin' ]]; then
     ln -s $(pwd)/tmux.mac.conf $HOME/.tmux.mac.conf
+    brew install reattach-to-user-namespace
 fi
 
 
