@@ -23,6 +23,8 @@ function lv {
 function cv {
     column -ts, $1 | lv
 }
+
+# Fix CIMS shit
 unalias mv
 unalias rm
 
@@ -91,6 +93,15 @@ alias L6X="ssh $L6 -Y"
 alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 alias Cassio="ssh -Y $CASSIO"
+
+alias Gpu="srun --qos=interactive --gres=gpu:1 --pty bash"
+
+function nb {
+    echo "Exporting XDG vairable, starting up Jupyter Notebook"
+    echo "Connect to $(hostname):<port>/?token=<token>"
+    export XDG_RUNTIME_DIR=""
+    jupyter notebook --no-browser --ip 0.0.0.0
+}
 
 # Set correct permissions
 umask 007

@@ -29,6 +29,9 @@ hi link diffSubname Normal
 set textwidth=80 colorcolumn=81 cursorline
 hi LineNr ctermbg=233 ctermfg=240
 hi Search ctermfg=16  ctermbg=141 cterm=bold guifg=#000000 guibg=#AF87FF gui=bold
+hi FoldColumn ctermbg=233
+hi Folded ctermbg=233 cterm=italic
+hi Comment cterm=italic
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Show tabs and trailing spaces.
@@ -51,9 +54,9 @@ set hls
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
-au FileType java,c,bib setlocal fdm=syntax fdc=4 aw
-autocmd InsertLeave,WinEnter *.{java,c,bib} setlocal foldmethod=syntax
-autocmd InsertEnter,WinLeave *.{java,c,bib} setlocal foldmethod=manual
+au FileType java,c,bib,lua setlocal fdm=syntax fdc=4 aw
+autocmd InsertLeave,WinEnter *.{java,c,bib,lua} setlocal foldmethod=syntax
+autocmd InsertEnter,WinLeave *.{java,c,bib,lua} setlocal foldmethod=manual
 
 " Split current file in two columns
 noremap <silent> <Leader>vs :set noscb<CR>:bo vs<CR>Ljzt:setl scb<CR><C-w>p:setl scb<CR>
@@ -84,6 +87,12 @@ let g:indent_guides_enable_on_vim_startup = 1
 let g:indent_guides_auto_colors = 0
 hi IndentGuidesOdd   ctermbg=234 guibg=#262626
 hi IndentGuidesEven  ctermbg=235 guibg=#303030
+let g:indent_guides_exclude_filetypes = ['help', 'notes']
 
 " Configure Vim-Note plugin
-let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
+"let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
+
+" Configure Vim-Lua improved syntax parser
+hi def link luaSpecialValue Identifier
+hi def link luaFuncKeyword Function
+hi def link luaFuncCall Normal
