@@ -1,0 +1,8 @@
+Host cims
+    HostName access.cims.nyu.edu
+    Port 22
+    Compression yes
+    User atcold
+    IdentityFile ~/.ssh/id_rsa
+    ForwardAgent yes
+    ServerAliveInterval 60

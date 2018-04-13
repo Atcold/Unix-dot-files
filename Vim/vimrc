@@ -70,6 +70,7 @@ set spelllang=en_gb
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
+set backspace=2
 
 " Enable Python highlight
 let g:python_highlight_all = 1

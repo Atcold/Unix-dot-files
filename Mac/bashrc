@@ -1,14 +1,28 @@
 # Improvind Bash ###############################################################
 alias grep="grep --colour='auto'"
+alias ls='gls --color=auto'
 alias ll="ls -l"
 alias l="ls -CF"
-alias ip='ipython3 --no-banner'
-alias pip3-update="pip3 install --upgrade pip && pip3 freeze --local | grep -v \
+alias ip='ipython --no-banner'
+alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
+alias py="python"
+
+# Create SOCKS proxy tunnel via $ACCESS
+function nb {
+    echo "Establishing SOCKS 5 proxy tunnel on port 8123"
+    read < <( ssh -D 8123 -C -q -N cims & echo $! )
+    echo "Done. PID = $REPLY"
+}
 
 #Screen colours
 export CLICOLOR=1
 export LSCOLORS=gxfxbEaEBxxEhEhBaDaCaD
+
+# Better ls colouring
+if [[ -f /usr/local/bin/gdircolors && -f $HOME/.dir_colors ]]; then
+    eval $(gdircolors -b $HOME/.dir_colors)
+fi
 
 # Coloured LESS (MAN) pages
 export LESS_TERMCAP_mb=$(printf '\e[01;31m') # enter blinking mode – red
@@ -54,7 +68,6 @@ export L4='lion4.'$CS
 export L5='lion5.'$CS
 export L6='lion6.'$CS
 export ACCESS="access.$CIMS"
-export MYBOX="box795.$CIMS"
 
 # and corresponding ALIAs
 alias L1="ssh $L1"
@@ -64,7 +77,6 @@ alias L4="ssh $L4"
 alias L5="ssh $L5"
 alias L6="ssh $L6"
 alias Access="ssh $ACCESS"
-alias MyBox="ssh $MYBOX"
 
 # with X forwarding
 alias L1X="ssh $L1 -Y"
@@ -74,7 +86,12 @@ alias L4X="ssh $L4 -Y"
 alias L5X="ssh $L5 -Y"
 alias L6X="ssh $L6 -Y"
 alias AccessX="ssh -Y $ACCESS"
-alias MyBoxX="ssh -Y $MYBOX"
+
+# mount Lecun
+function LeCun {
+    sshfs $ACCESS:vLecunGroup/ LecunGroup
+    echo "/misc/vlgscratch4/LecunGroup mounted at ~/LecunGroup"
+}
 
 # CUDA #########################################################################
 export PATH=$PATH':/usr/local/cuda/bin'
