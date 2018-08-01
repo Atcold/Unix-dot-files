@@ -13,6 +13,11 @@ alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 alias tree='tree -C'
+alias ip='ipython --no-banner'
+alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
+'^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
+alias py="python"
+
 # Highlight numbers when displaying text files
 alias v="grep --colour=always -nTP '(?<![\w\.])[-+]?[0-9]*[\.eE]?\-?[0-9]+|$'"
 # Send v output to less
