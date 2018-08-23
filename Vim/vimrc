@@ -90,9 +90,14 @@ hi IndentGuidesEven  ctermbg=235 guibg=#303030
 let g:indent_guides_exclude_filetypes = ['help', 'notes']
 
 " Configure Vim-Note plugin
-"let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
+let g:notes_directories = ["$HOME/Dropbox/Vim/Notes/"]
 
 " Configure Vim-Lua improved syntax parser
 hi def link luaSpecialValue Identifier
 hi def link luaFuncKeyword Function
 hi def link luaFuncCall Normal
+
+" Configure GitGutter plugin: add / checkout / diff
+nmap <Leader>ha <Plug>GitGutterStageHunk
+nmap <Leader>hc <Plug>GitGutterUndoHunk
+nmap <Leader>hd <Plug>GitGutterPreviewHunk
