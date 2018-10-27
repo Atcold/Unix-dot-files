@@ -6,3 +6,11 @@ Host cims
     IdentityFile ~/.ssh/id_rsa
     ForwardAgent yes
     ServerAliveInterval 60
+
+Host cassio rose* lion* vine* hpc* weaver*
+    HostName %h.cs.nyu.edu
+    ProxyJump cims
+
+Host mybox
+    HostName box795.cims.nyu.edu
+    ProxyJump cims

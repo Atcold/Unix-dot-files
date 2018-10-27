@@ -9,6 +9,7 @@ alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 alias py="python"
 alias jn='jupyter notebook'
 alias pl="ip --pylab"
+alias eject="diskutil eject"
 
 # Create SOCKS proxy tunnel via $ACCESS
 function nb {
@@ -66,16 +67,21 @@ export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
 # Shortcuts for CIMS machines ##################################################
 #Some useful EXPORTs
-export NYU='nyu.edu'
-export CIMS='cims.'$NYU
-export CS='cs.'$NYU
+export NYU="nyu.edu"
+export CIMS="cims.$NYU"
+export CS="cs.$NYU"
 export ACCESS="access.$CIMS"
+export CASSIO="cassio"
+export MYBOX="mybox"
 
 # and corresponding ALIASes
 alias Access="ssh $ACCESS"
+alias Cassio="ssh $CASSIO"
+alias MyBox="ssh $MYBOX"
 
 # with X forwarding
 alias AccessX="ssh -Y $ACCESS"
+alias MyBoxX="ssh -Y $MYBOX"
 
 # mount Lecun
 function LeCun {
