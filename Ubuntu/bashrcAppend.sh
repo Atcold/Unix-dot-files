@@ -7,13 +7,14 @@ alias ls='ls --color=auto'
 alias ll='ls -l' # overwrite Ubuntu's ll
 alias l='ls -CF'
 alias l1='l -1'
-alias tmux='TERM=xterm-256color /usr/bin/tmux'
+alias tmux="TERM=xterm-256color $HOME/local/bin/tmux"
 alias vim='TERM=xterm-256color /usr/bin/vim'
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 alias tree='tree -C'
 alias ip='ipython --no-banner'
+alias pl='ip --pylab'
 alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
 alias py="python"
@@ -32,6 +33,7 @@ function cv {
 # Fix CIMS shit
 unalias mv
 unalias rm
+export PROMPT_COMMAND=""
 
 # Git stuff
 function parse_git_dirty {
@@ -99,7 +101,7 @@ alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 alias Cassio="ssh -Y $CASSIO"
 
-alias Gpu="srun --qos=interactive --gres=gpu:1 --pty bash"
+alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-9] --pty bash"
 
 function nb {
     echo "Exporting XDG vairable, starting up Jupyter Notebook"
