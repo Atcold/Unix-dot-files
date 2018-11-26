@@ -51,6 +51,7 @@ autocmd BufWritePre * :%s/\s\+$//ec
 set hls
 
 " Wildmenu
+set wildmode=longest,list,full
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
