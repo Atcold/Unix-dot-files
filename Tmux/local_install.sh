@@ -2,23 +2,23 @@
 # tmux will be installed in $HOME/local/bin.
 # It's assumed that wget and a C/C++ compiler are installed.
 
-# exit on error
+# Exit on error
 set -e
 
-TMUX_VERSION=2.6
+TMUX_VERSION=2.9a
 LIBEVENT_VERSION=2.1.8
 NCURSES_VERSION=6.0
 
-# create our directories
+# Create our directories
 mkdir -p $HOME/local $HOME/tmux_tmp
 cd $HOME/tmux_tmp
 
-# download source files for tmux, libevent, and ncurses
-wget https://github.com/tmux/tmux/releases/download/2.6/tmux-${TMUX_VERSION}.tar.gz
+# Download source files for tmux, libevent, and ncurses
+wget https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz
 wget https://github.com/downloads/libevent/libevent/libevent-${LIBEVENT_VERSION}-stable.tar.gz
 wget ftp://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz
 
-# extract files, configure, and compile
+# Extract files, configure, and compile
 
 ############
 # libevent #
@@ -50,13 +50,15 @@ CPPFLAGS="-I$HOME/local/include -I$HOME/local/include/ncurses" LDFLAGS="-static 
 cp tmux $HOME/local/bin
 cd ..
 
-# cleanup
+# Cleanup
 rm -rf $HOME/tmux_tmp
 
+# Add alias to local installation
 echo ''                                                        >> ~/.bashrc
 echo '# Local Tmux installation'                               >> ~/.bashrc
 echo alias tmux=\'TERM=xterm-256color '$HOME'/local/bin/tmux\' >> ~/.bashrc
 
+# Make others (not Tmux) think 256 colours are available
 sed -i '1i\# Fool others to think TERM=screen-256color in Tmux' ~/.bashrc
 sed -i '2i\[ -n $TMUX ] && export TERM=screen-256color' ~/.bashrc
 sed -i '3i\\' ~/.bashrc

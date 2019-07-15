@@ -1,9 +1,18 @@
-echo 'Locally installing Tmux and settings'
+echo 'Installing Tmux configurations'
 
-# Install latest Tmux in $HOME
-./local_install.sh
+# installing tmux and tmux-256color terminfo
+mkdir -p $HOME/.terminfo
+TERMINFO=$HOME/.terminfo tic -x tmux.terminfo
 
-# Install personal settings
-./conf_settings.sh
+# Install config.
+rm -rf ~/.tmux.conf
+ln -s $(pwd)/tmux.conf $HOME/.tmux.conf
+
+# If on Mac, get also Mac specific settings
+if [[ $(uname) == 'Darwin' ]]; then
+    brew install tmux reattach-to-user-namespace
+    ln -s $(pwd)/tmux.mac.conf $HOME/.tmux.mac.conf
+    brew install reattach-to-user-namespace
+fi
 
 echo 'Done.'
