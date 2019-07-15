@@ -1,6 +1,6 @@
 # Improvind Bash ###############################################################
 alias grep="grep --colour='auto'"
-alias ls='gls --color=auto'
+alias ls='gls -v --color=auto'
 alias ll="ls -l"
 alias l="ls -CF"
 alias ip='ipython --no-banner'
@@ -20,8 +20,9 @@ function nb {
 
 # Mount my box drive on my Mac
 function MountMyBox {
-    ssh -L 2222:box795.cims.nyu.edu:22 $ACCESS -Nf
-    sshfs -p 2222 localhost:/ /Volumes/MyBox/
+    # ssh -L 2222:box795:22 $ACCESS -Nf
+    # sshfs -p 2222 localhost:/ /Volumes/MyBox/
+    sshfs mybox:/ /Volumes/MyBox
 }
 
 #Screen colours
@@ -83,10 +84,25 @@ alias MyBox="ssh $MYBOX"
 alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 
-# mount Lecun
-function LeCun {
-    sshfs $ACCESS:vLecunGroup/ LecunGroup
-    echo "/misc/vlgscratch4/LecunGroup mounted at ~/LecunGroup"
+# Find and open papers #########################################################
+# Adapted from https://superuser.com/a/1293358/224792
+# Find any item matching search query in file name
+function spot {
+  mdfind "kMDItemDisplayName=='*$1*'cd";
+}
+
+# Restrict to files under (recursive) a specific path
+function findpaper {
+    mdfind \
+        -onlyin "$HOME/NYU/Articles" \
+        -onlyin "$HOME/NYU/Old articles" \
+        "kMDItemDisplayName=='*$1*'cd";
+}
+
+# Default to open the first entry unless 2nd positional argument is given
+function openpaper {
+    FILEID=$(printf "%sp" ${2:-1})
+    open "$(findpaper $1 | sed -n "${FILEID}")"
 }
 
 # CUDA #########################################################################
