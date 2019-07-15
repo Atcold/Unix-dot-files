@@ -3,7 +3,7 @@ set -o vi
 export EDITOR="vim"
 
 # Some more useful ALIAs
-alias ls='ls --color=auto'
+alias ls='ls -v --color=auto'
 alias ll='ls -l' # overwrite Ubuntu's ll
 alias l='ls -CF'
 alias l1='l -1'
