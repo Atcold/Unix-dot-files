@@ -10,11 +10,25 @@ alias py="python"
 alias jn='jupyter notebook'
 alias pl="ip --pylab"
 alias eject="diskutil eject"
+alias skim="open -a /Applications/Skim.app"
+alias preview="open -a /Applications/Preview.app"
 
-# Create SOCKS proxy tunnel via $ACCESS
+# Create SOCKS proxy tunnel via cims
 function nb {
     echo "Establishing SOCKS 5 proxy tunnel on port 8123"
     read < <( ssh -D 8123 -C -q -N cims & echo $! )
+    echo "Done. PID = $REPLY"
+}
+
+# Connect remote server port 22 to localhost port 6000 for PyCharm
+# Run as: pycharm server_name
+function PyCharm {
+    if [ -z "$1" ]; then
+        echo -e '  > run as: \033[1;32m$\033[0m PyCharm <my_server>'
+        return
+    fi
+    echo "Connecting localhost:6000 -> $1:22"
+    read < <( ssh -NCqL 6000:localhost:22 $1 & echo $! )
     echo "Done. PID = $REPLY"
 }
 
@@ -112,3 +126,23 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib'
 # Conda ########################################################################
 ##export PATH=usr/local/miniconda3/bin:"$PATH"
 export PATH=/usr/local/miniconda3/bin:"$PATH"
+
+# Trelify ######################################################################
+export TRELIFY="ubuntu@3.94.44.239"
+alias Trelify="ssh -i ~/.ssh/trelify-pollution-image.pem $TRELIFY"
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/usr/local/Caskroom/miniconda/base/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/usr/local/Caskroom/miniconda/base/etc/profile.d/conda.sh" ]; then
+        . "/usr/local/Caskroom/miniconda/base/etc/profile.d/conda.sh"
+    else
+        export PATH="/usr/local/Caskroom/miniconda/base/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
