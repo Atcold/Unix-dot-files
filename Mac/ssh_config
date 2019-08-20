@@ -10,7 +10,12 @@ Host cims
 Host cassio rose* lion* vine* hpc* weaver*
     HostName %h.cs.nyu.edu
     ProxyJump cims
+    StrictHostKeyChecking no
 
 Host mybox
     HostName box795.cims.nyu.edu
     ProxyJump cims
+
+Host localhost
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
