@@ -8,7 +8,6 @@
 #SBATCH --qos=batch
 #SBATCH --nodes=1
 #SBATCH --mem=40000
-#SBATCH --mail-type=END,FAIL # notifications for job done & fail
 
 eval "$(conda shell.bash hook)"
 conda activate PPUU
