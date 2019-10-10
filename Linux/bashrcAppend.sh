@@ -112,3 +112,10 @@ function nb {
 
 # Set correct permissions
 umask 007
+# port forwarding to connect to remote jupyter notebook
+# usage: sshjn <username>@<remote_machine_name> <localport>
+function sshjn() {
+    ssh -N -f -L localhost:"$2":localhost:10001 $1
+}
+# to submit the job for running jupyter server on slurm
+alias srunjn='sbatch $HOME/Unix-dot-files/Linux/jn.slurm'
