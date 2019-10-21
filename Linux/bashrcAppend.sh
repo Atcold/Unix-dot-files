@@ -18,6 +18,8 @@ alias pl='ip --pylab'
 alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
 alias py="python"
+alias weechat="$HOME/local/bin/weechat"
+alias PPUU="conda activate PPUU"
 
 # Highlight numbers when displaying text files
 alias v="grep --colour=always -nTP '(?<![\w\.])[-+]?[0-9]*[\.eE]?\-?[0-9]+|$'"
@@ -103,9 +105,11 @@ alias Cassio="ssh -Y $CASSIO"
 
 alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-9] --pty bash"
 
+# Run once: $ jupyter notebook password
 function nb {
     echo "Exporting XDG vairable, starting up Jupyter Notebook"
-    echo "Connect to $(hostname):<port>/?token=<token>"
+    echo -ne '  > on your local machine run: \033[1;32m$\033[0m '
+    echo "nb $(hostname --short)"
     export XDG_RUNTIME_DIR=""
     jupyter notebook --no-browser --ip 0.0.0.0
 }
