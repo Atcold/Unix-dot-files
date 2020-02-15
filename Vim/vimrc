@@ -1,7 +1,6 @@
 source ~/.vim/myBundle.vim
 syntax enable
 set number
-set relativenumber
 set nowrap
 
 " Use specific spacing for different formats
@@ -19,20 +18,40 @@ au FileType gitcommit setl tw=0 cc=0
 set laststatus=2
 set statusline=[%n]%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 
-" molokai settings """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-colorscheme molokai
-hi diffAdded   ctermbg=NONE ctermfg=10 cterm=NONE guibg=NONE guifg=#B9FC32 gui=NONE
-hi diffRemoved ctermbg=NONE ctermfg=9  cterm=NONE guibg=NONE guifg=#FF2676 gui=NONE
-hi Conceal ctermbg=NONE guibg=NONE
-hi link diffLine String
-hi link diffSubname Normal
-set textwidth=80 colorcolumn=81 cursorline
-hi LineNr ctermbg=233 ctermfg=240
-hi Search ctermfg=16  ctermbg=141 cterm=bold guifg=#000000 guibg=#AF87FF gui=bold
-hi FoldColumn ctermbg=233
-hi Folded ctermbg=233 cterm=italic
-hi Comment cterm=italic
+" dracula settings """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+colorscheme dracula
+hi Normal guifg=#F9F8F2 guibg=#1B1D1E ctermfg=252 ctermbg=233
+hi CursorLine ctermbg=234 cterm=none guibg=#293739
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+" Markdown hack
+function! MathAndLiquid()
+    "" Define certain regions
+    " Block math. Look for "$$[anything]$$"
+    syn region math start=/\$\$/ end=/\$\$/
+    " inline math. Look for "$[not $][anything]$"
+    syn match math_block '\$[^$].\{-}\$'
+
+    " Liquid single line. Look for "{%[anything]%}"
+    syn match liquid '{%.*%}'
+    " Liquid multiline. Look for "{%[anything]%}[anything]{%[anything]%}"
+    syn region highlight_block start='{% highlight .*%}' end='{%.*%}'
+    " Fenced code blocks, used in GitHub Flavored Markdown (GFM)
+    syn region highlight_block start='```' end='```'
+
+    "" Actually highlight those regions.
+    hi link math Statement
+    hi link liquid Statement
+    hi link highlight_block Function
+    hi link math_block Function
+endfunction
+
+" Call everytime we open a Markdown file
+autocmd BufRead,BufNewFile,BufEnter *.md,*.markdown call MathAndLiquid()
+
+" Text limit
+set textwidth=80 colorcolumn=81 cursorline
+autocmd FileType python setlocal tw=120 cc=121
 
 " Show tabs and trailing spaces.
 set encoding=utf-8
@@ -41,8 +60,7 @@ set list listchars=tab:▸\ ,trail:·
 " Unrecogised extensions fix
 au BufRead,BufNewFile *.rockspec setl filetype=lua
 au BufRead,BufNewFile *.plt setl filetype=gnuplot
-au BufRead,BufNewFile *.md       setl filetype=markdown tw=0 cc=0
-au BufRead,BufNewFile *.py       setl tw=120 cc=121
+au BufRead,BufNewFile *.md setl filetype=markdown tw=0 cc=0 wrap lbr spell
 
 " Ask to clean all trailing white-spaces upon saving
 autocmd BufWritePre * :%s/\s\+$//ec
@@ -58,9 +76,6 @@ set wildmenu
 au FileType java,c,bib,lua setlocal fdm=syntax fdc=4 aw
 autocmd InsertLeave,WinEnter *.{java,c,bib,lua} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib,lua} setlocal foldmethod=manual
-
-" Split current file in two columns
-noremap <silent> <Leader>vs :set noscb<CR>:bo vs<CR>Ljzt:setl scb<CR><C-w>p:setl scb<CR>
 
 " Extensions settings """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " TeX settings
@@ -102,3 +117,7 @@ hi def link luaFuncCall Normal
 nmap <Leader>ha <Plug>GitGutterStageHunk
 nmap <Leader>hc <Plug>GitGutterUndoHunk
 nmap <Leader>hd <Plug>GitGutterPreviewHunk
+
+" Configure Jupytext plugin
+let g:jupytext_fmt = 'py:percent'
+let g:jupytext_filetype_map = {'py': 'python'}
