@@ -1,6 +1,6 @@
 echo 'Installing Vim configurations'
 
-pip install jupytext
+/usr/local/bin/pip3 install jupytext
 rm -rf vim/bundle
 rm -rf ~/.vim*
 mkdir vim/bundle
