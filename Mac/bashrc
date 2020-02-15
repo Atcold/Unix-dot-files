@@ -8,11 +8,18 @@ alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
 alias py="python"
 alias jn='jupyter notebook'
+alias jl='jupyter lab'
 alias pl="ip --pylab"
 alias eject="diskutil eject"
 alias skim="open -a /Applications/Skim.app"
 alias preview="open -a /Applications/Preview.app"
 alias PPUU="conda activate PPUU"
+alias   ..='cd ../'
+alias  ...='cd ../../'
+alias ....='cd ../../../'
+alias   .3='cd ../../../'
+alias   .4='cd ../../../../'
+alias   .5='cd ../../../../../'
 
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
@@ -21,7 +28,7 @@ function nb {
         echo -e '  > run as: \033[1;32m$\033[0m nb <my_server>'
         return
     fi
-    echo "Connecting http://localhost:8000 -> $1:22"
+    echo "Connecting http://localhost:8000 -> $1:8888"
     read < <( ssh -NCqL 8000:localhost:8888 $1 & echo $! )
     echo "Done. PID = $REPLY"
 }
@@ -131,10 +138,6 @@ function openpaper {
 # CUDA #########################################################################
 export PATH=$PATH':/usr/local/cuda/bin'
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH':/usr/local/cuda/lib'
-
-# Conda ########################################################################
-##export PATH=usr/local/miniconda3/bin:"$PATH"
-export PATH=/usr/local/miniconda3/bin:"$PATH"
 
 # Trelify ######################################################################
 export TRELIFY="ubuntu@3.94.44.239"
