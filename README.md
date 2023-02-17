@@ -8,7 +8,7 @@ This goal is not too ambitious since we are starting from my personal settings (
 
 - Since I'm still using Bash (and I'm not moving to `zsh`) we should tell Mac to revert to the old shell. \
   `System Settings…` / `Users & Groups` / (`^-click`) `Advanced options…` / `Login shell` choose `/bin/bash`.
-- Install [`brew`](https://brew.sh/) and run `brew install git`.
+- Install [`brew`](https://brew.sh/).
 
 ## Installation instructions
 
