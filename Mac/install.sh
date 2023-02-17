@@ -1,7 +1,7 @@
 echo 'Installing essential command line tools'
 
-brew cask install osxfuse
-brew install unrar coreutils pdfgrep sshfs bash-completion rename htop wget
+brew install coreutils pdfgrep bash-completion rename htop wget miniconda
+brew install visual-studio-code rectangle keepingyouawake spotify
 
 echo 'Done.'
 

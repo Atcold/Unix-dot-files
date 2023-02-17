@@ -4,12 +4,18 @@ This repository aims to achieve the highest beauty in terms of Unix configuratio
 This goal is not too ambitious since we are starting from my personal settings (he, he, he :wink:) which could be improved with forking and pull-requesting further updates.
 
 
-## "Installation" instructions
+## Setting up your Mac
+
+- Since I'm still using Bash (and I'm not moving to `zsh`) we should tell Mac to revert to the old shell. \
+  `System Settings…` / `Users & Groups` / (`^-click`) `Advanced options…` / `Login shell` choose `/bin/bash`.
+- Install [`brew`](https://brew.sh/) and run `brew install git`.
+
+## Installation instructions
 
 Clone the repository
 
 ```bash
-git clone git@github.com:Atcold/Unix-dot-files.git
+git clone https://github.com/Atcold/Unix-dot-files.git
 ```
 
 Then, after having chosen the subfolder of interest (say for example [`Vim`](https://github.com/Atcold/Unix-dot-files/tree/master/Vim))
@@ -38,7 +44,7 @@ If you'd like only to fix the colours, then run `Ubuntu/fix_colours.sh` only.
 
 ## MacOS
 
-In order to customise your *Terminal* (or *TotalTerminal*) application, you can simply import the file `Mac-Terminal/Pastel.terminal` and set it as default.
+In order to customise your *Terminal* application, you can simply import the file `Mac-Terminal/Monokai.terminal` and set it as default.
 
 
 # Substituting <kbd>Caps Lock</kbd> with <kbd>Ctrl</kbd>
@@ -79,4 +85,4 @@ We can type an *é* with <kbd>AltGr</kbd>-<kbd>'</kbd> <kbd>E</kbd>.
 
 ## MacOS
 
-`System Preferences...` / `Keyboard` / `Modifier Keys...` / `Caps Lock` > choose `^ Control`.
+`System Settings…` / `Keyboard` / `Keyboard Shortcuts…` / `Modifier Keys` / `Caps Lock` > choose `^ Control`.

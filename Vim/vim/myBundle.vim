@@ -9,16 +9,12 @@ call vundle#begin()
 
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
-Plugin 'tomasr/molokai'
 Plugin 'tpope/vim-fugitive'
 Plugin 'airblade/vim-gitgutter'
 Plugin 'Raimondi/delimitMate'
 Plugin 'AndrewRadev/linediff.vim'
 Plugin 'vim-python/python-syntax'
-Plugin 'xolox/vim-misc'
-Plugin 'xolox/vim-notes'
 Plugin 'nathanaelkane/vim-indent-guides'
-Plugin 'tbastos/vim-lua'
 Plugin 'dracula/vim', { 'name': 'dracula' }
 Plugin 'goerz/jupytext.vim'
 " All of your Plugins must be added before the following line
