@@ -59,7 +59,7 @@ export CLICOLOR=1
 export LSCOLORS=gxfxbEaEBxxEhEhBaDaCaD
 
 # Better ls colouring
-if [[ -f /usr/local/bin/gdircolors && -f $HOME/.dir_colors ]]; then
+if [[ -f $(brew --prefix)/bin/gdircolors && -f $HOME/.dir_colors ]]; then
     eval $(gdircolors -b $HOME/.dir_colors)
 fi
 
