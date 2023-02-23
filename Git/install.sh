@@ -1,6 +1,9 @@
 echo 'Installing Nbdime'
 
-pip install nbdime
+pip3 install nbdime
+
+echo 'Done.'
+
 
 echo 'Installing Git configurations'
 
