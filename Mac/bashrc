@@ -58,6 +58,16 @@ function MountMyBox {
 export CLICOLOR=1
 export LSCOLORS=gxfxbEaEBxxEhEhBaDaCaD
 
+# Load homebrew
+if [ -f /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -f /usr/local/Homebrew/bin/brew ]; then
+    eval "$(/usr/local/Homebrew/bin/brew shellenv)"
+else
+    echo "brew not found :/"
+fi
+
+
 # Better ls colouring
 if [[ -f $(brew --prefix)/bin/gdircolors && -f $HOME/.dir_colors ]]; then
     eval $(gdircolors -b $HOME/.dir_colors)
@@ -77,7 +87,6 @@ set -o vi
 export EDITOR="vim"
 
 # Essential bash completion
-eval "$(/opt/homebrew/bin/brew shellenv)"
 if [ -f $(brew --prefix)/etc/bash_completion ]
 then
     source $(brew --prefix)/etc/bash_completion
