@@ -1,6 +1,6 @@
 echo 'Installing essential command line tools'
 
-brew install git coreutils pdfgrep bash-completion rename htop wget miniconda ranger tree rclone
+brew install git coreutils pdfgrep bash-completion rename htop wget miniconda ranger tree rclone gh
 brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avidemux
 
 echo 'Done.'
