@@ -20,6 +20,12 @@ alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 alias py="python"
 alias weechat="$HOME/local/bin/weechat"
 alias PPUU="conda activate PPUU"
+alias   ..='cd ../'
+alias  ...='cd ../../'
+alias ....='cd ../../../'
+alias   .3='cd ../../../'
+alias   .4='cd ../../../../'
+alias   .5='cd ../../../../../'
 
 # Highlight numbers when displaying text files
 alias v="grep --colour=always -nTP '(?<![\w\.])[-+]?[0-9]*[\.eE]?\-?[0-9]+|$'"
