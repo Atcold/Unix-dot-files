@@ -103,7 +103,7 @@ alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 alias Cassio="ssh -Y $CASSIO"
 
-alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-9] --pty bash"
+alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-4,7-9] --pty bash"
 
 # Run once: $ jupyter notebook password
 function nb {
@@ -113,6 +113,19 @@ function nb {
     export XDG_RUNTIME_DIR=""
     jupyter notebook --no-browser --ip 0.0.0.0
 }
+function lab {
+    echo "Exporting XDG vairable, starting up Jupyter Notebook"
+    echo -ne '  > on your local machine run: \033[1;32m$\033[0m '
+    echo "nb $(hostname --short)"
+    export XDG_RUNTIME_DIR=""
+    jupyter lab --no-browser --ip 0.0.0.0
+}
 
 # Set correct permissions
 umask 007
+
+# Add local stuff
+export PATH="$HOME/.local/bin:$PATH"
+
+# Setup the singularity
+export SINGULARITY_BIND="/misc"
