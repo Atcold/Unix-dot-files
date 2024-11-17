@@ -3,7 +3,7 @@ Host cims
     Port 22
     Compression yes
     User atcold
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/id_ed25519
     ForwardAgent yes
     ServerAliveInterval 60
 
