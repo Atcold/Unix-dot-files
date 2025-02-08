@@ -151,3 +151,12 @@ function openpaper {
 # Trelify ######################################################################
 export TRELIFY="ubuntu@3.94.44.239"
 alias Trelify="ssh -i ~/.ssh/trelify-pollution-image.pem $TRELIFY"
+
+# Created by `pipx` on 2024-08-28 22:28:30
+export PATH="$PATH:/Users/atcold/.local/bin"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/atcold/.lmstudio/bin"
+
+# Add Gollama to PATH
+export PATH="$PATH:$HOME/go/bin"

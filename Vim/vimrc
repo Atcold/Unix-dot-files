@@ -61,6 +61,8 @@ set list listchars=tab:▸\ ,trail:·
 au BufRead,BufNewFile *.rockspec setl filetype=lua
 au BufRead,BufNewFile *.plt setl filetype=gnuplot
 au BufRead,BufNewFile *.md setl filetype=markdown tw=0 cc=0 wrap lbr spell
+au BufRead,BufNewFile *.sn setl filetype=lisp
+au BufRead,BufNewFile *.lsh setl filetype=lisp
 
 " Ask to clean all trailing white-spaces upon saving
 autocmd BufWritePre * :%s/\s\+$//ec
