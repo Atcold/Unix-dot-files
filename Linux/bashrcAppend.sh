@@ -7,7 +7,7 @@ alias ls='ls -v --color=auto'
 alias ll='ls -l' # overwrite Ubuntu's ll
 alias l='ls -CF'
 alias l1='l -1'
-alias tmux="TERM=xterm-256color $HOME/local/bin/tmux"
+# alias tmux="TERM=xterm-256color $HOME/local/bin/tmux"
 alias vim='TERM=xterm-256color /usr/bin/vim'
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
@@ -109,7 +109,8 @@ alias AccessX="ssh -Y $ACCESS"
 alias MyBoxX="ssh -Y $MYBOX"
 alias Cassio="ssh -Y $CASSIO"
 
-alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-4,7-9] --pty bash"
+# alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-4,7-9] --pty bash"
+alias Gpu="srun --qos=interactive --gres=gpu:1 --pty bash"
 
 # Run once: $ jupyter notebook password
 function nb {
@@ -135,3 +136,8 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Setup the singularity
 export SINGULARITY_BIND="/misc"
+
+# Setting up Python env
+export PIP_CACHE_DIR=$HOME/atcold/.cache/pip
+export PYTHONUSERBASE=$HOME/atcold/.local/lib/python3.9
+export PATH="$HOME/atcold/.local/lib/python3.9/bin:$PATH"
