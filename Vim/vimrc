@@ -11,7 +11,7 @@ set nowrap
 set et ts=4 sw=4 sts=4
 au FileType verilog,matlab setl et ts=4 sw=4 sts=4
 au FileType lua setl et ts=3 sw=3 sts=3
-au FileType c,cuda,tex,bib setl et ts=2 sw=2 sts=2
+au FileType c,cpp,cuda,tex,bib setl et ts=2 sw=2 sts=2
 au FileType gitcommit setl tw=0 cc=0
 
 " Status bar formatting
@@ -75,7 +75,7 @@ set wildmode=longest,list,full
 set wildmenu
 
 " Automatically switch between syntax and manual foldmethod
-au FileType java,c,bib,lua setlocal fdm=syntax fdc=4 aw
+"au FileType java,c,bib,lua setlocal fdm=syntax fdc=4 aw
 autocmd InsertLeave,WinEnter *.{java,c,bib,lua} setlocal foldmethod=syntax
 autocmd InsertEnter,WinLeave *.{java,c,bib,lua} setlocal foldmethod=manual
 

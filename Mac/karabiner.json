@@ -1,4 +1,5 @@
 {
+    "global": { "show_in_menu_bar": false },
     "profiles": [
         {
             "complex_modifications": {
@@ -7,6 +8,17 @@
                         "description": "Shift + Esc to ~",
                         "manipulators": [
                             {
+                                "conditions": [
+                                    {
+                                        "identifiers": [
+                                            {
+                                                "product_id": 591,
+                                                "vendor_id": 1452
+                                            }
+                                        ],
+                                        "type": "device_if"
+                                    }
+                                ],
                                 "from": {
                                     "key_code": "escape",
                                     "modifiers": { "mandatory": ["shift"] }
@@ -26,6 +38,17 @@
                         "description": "LeftCommand + Esc to LeftCommand + Tilda",
                         "manipulators": [
                             {
+                                "conditions": [
+                                    {
+                                        "identifiers": [
+                                            {
+                                                "product_id": 591,
+                                                "vendor_id": 1452
+                                            }
+                                        ],
+                                        "type": "device_if"
+                                    }
+                                ],
                                 "from": {
                                     "key_code": "escape",
                                     "modifiers": { "mandatory": ["left_command"] }
@@ -42,6 +65,7 @@
                     },
                     {
                         "description": "Numeric Keypad Mode",
+                        "enabled": false,
                         "manipulators": [
                             {
                                 "conditions": [
@@ -179,6 +203,7 @@
                     },
                     {
                         "description": "Numeric Keypad Trigger [RightCommand as trigger key]",
+                        "enabled": false,
                         "manipulators": [
                             {
                                 "from": { "key_code": "right_command" },
@@ -207,6 +232,17 @@
                         "description": "Option `",
                         "manipulators": [
                             {
+                                "conditions": [
+                                    {
+                                        "identifiers": [
+                                            {
+                                                "product_id": 591,
+                                                "vendor_id": 1452
+                                            }
+                                        ],
+                                        "type": "device_if"
+                                    }
+                                ],
                                 "from": {
                                     "key_code": "escape",
                                     "modifiers": { "mandatory": ["left_option"] }
@@ -253,24 +289,12 @@
             ],
             "fn_function_keys": [
                 {
-                    "from": { "key_code": "f3" },
-                    "to": [{ "key_code": "mission_control" }]
-                },
-                {
-                    "from": { "key_code": "f4" },
-                    "to": [{ "key_code": "launchpad" }]
-                },
-                {
                     "from": { "key_code": "f5" },
-                    "to": [{ "key_code": "illumination_decrement" }]
+                    "to": [{ "apple_vendor_top_case_key_code": "illumination_down" }]
                 },
                 {
                     "from": { "key_code": "f6" },
-                    "to": [{ "key_code": "illumination_increment" }]
-                },
-                {
-                    "from": { "key_code": "f9" },
-                    "to": [{ "consumer_key_code": "fastforward" }]
+                    "to": [{ "apple_vendor_top_case_key_code": "illumination_up" }]
                 }
             ],
             "name": "Default profile",
@@ -281,10 +305,7 @@
                     "to": [{ "key_code": "left_control" }]
                 }
             ],
-            "virtual_hid_keyboard": {
-                "country_code": 0,
-                "keyboard_type_v2": "ansi"
-            }
+            "virtual_hid_keyboard": { "keyboard_type_v2": "ansi" }
         }
     ]
 }
