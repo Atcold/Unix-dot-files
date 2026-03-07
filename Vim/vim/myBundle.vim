@@ -15,7 +15,8 @@ Plugin 'Raimondi/delimitMate'
 Plugin 'AndrewRadev/linediff.vim'
 Plugin 'vim-python/python-syntax'
 Plugin 'nathanaelkane/vim-indent-guides'
-Plugin 'dracula/vim', { 'name': 'dracula' }
+"Plugin 'dracula/vim', { 'name': 'dracula' }
+Plugin 'chriskempson/base16-vim'
 Plugin 'goerz/jupytext.vim'
 " All of your Plugins must be added before the following line
 call vundle#end()            " required

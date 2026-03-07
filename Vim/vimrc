@@ -19,10 +19,12 @@ set laststatus=2
 set statusline=[%n]%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %P
 
 " dracula settings """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-colorscheme dracula
-hi Normal guifg=#F9F8F2 guibg=#1B1D1E ctermfg=252 ctermbg=233
-hi CursorLine ctermbg=234 cterm=none guibg=#293739
+"colorscheme dracula
+"hi Normal guifg=#F9F8F2 guibg=#1B1D1E ctermfg=252 ctermbg=233
+"hi CursorLine ctermbg=234 cterm=none guibg=#293739
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+set termguicolors
+colorscheme base16-gruvbox-dark-hard
 
 " Markdown hack
 function! MathAndLiquid()

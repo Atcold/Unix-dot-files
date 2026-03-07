@@ -156,3 +156,5 @@ export PATH="$PATH:/Users/atcold/.lmstudio/bin"
 
 # Add Gollama to PATH
 export PATH="$PATH:$HOME/go/bin"
+
+#eval "$(gh copilot alias -- bash)"
