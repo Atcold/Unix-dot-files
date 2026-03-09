@@ -4,6 +4,9 @@ input=$(cat)
 # Extract from JSON
 DIR=$(echo "$input" | jq -r '.workspace.current_dir')
 PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
+MODEL=$(echo "$input" | jq -r '.model.display_name // "Claude"' | tr -d ' ')
+MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | cut -d. -f1)
+DURATION=$(printf "%d:%02d" $((MS / 3600000)) $(((MS % 3600000) / 60000)))
 
 # Abbreviate home dir
 SHORT_DIR="${DIR/#$HOME/~}"
@@ -28,4 +31,4 @@ YELLOW='\033[1;33m'
 DIM='\033[2m'
 RESET='\033[0m'
 
-printf "${MAGENTA}${USER}${WHITE}@${BLUE}${COMPUTER} ${YELLOW}${SHORT_DIR}${RESET}${GIT_INFO} ${DIM}${PCT}% ctx${RESET}\n"
+printf "${MAGENTA}${MODEL}${WHITE}@${BLUE}${COMPUTER} ${YELLOW}${SHORT_DIR}${RESET}${GIT_INFO} ${DIM}${PCT}%% ctx, ${DURATION}${RESET}\n"
