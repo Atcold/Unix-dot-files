@@ -11,6 +11,9 @@ echo 'Installing Bash configurations'
 rm -rf $HOME/.bashrc
 ln -s $(pwd)/bashrc $HOME/.bashrc
 
+rm -rf $HOME/.profile
+ln -s $(pwd)/profile $HOME/.profile
+
 # Get decent ls colours
 wget "https://github.com/trapd00r/LS_COLORS/raw/master/LS_COLORS" -O $HOME/.dir_colors
 
