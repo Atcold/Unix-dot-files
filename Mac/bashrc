@@ -1,6 +1,6 @@
 # Improvind Bash ###############################################################
-alias grep="grep --colour='always'"
-alias ls='gls -v --color=always'
+alias grep="grep --colour='auto'"
+alias ls='gls -v --color=auto'
 alias ll="ls -l"
 alias l="ls -CF"
 alias ip='ipython --no-banner'
@@ -22,6 +22,7 @@ alias   .3='cd ../../../'
 alias   .4='cd ../../../../'
 alias   .5='cd ../../../../../'
 alias screen-off="pmset displaysleepnow"
+alias ql="qlmanage -p &>/dev/null"  # brew install syntax-highlight
 
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
