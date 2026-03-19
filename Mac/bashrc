@@ -23,6 +23,7 @@ alias   .4='cd ../../../../'
 alias   .5='cd ../../../../../'
 alias screen-off="pmset displaysleepnow"
 alias ql="qlmanage -p &>/dev/null"  # brew install syntax-highlight
+alias bat="bat --paging=always"
 
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
