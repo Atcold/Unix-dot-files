@@ -8,6 +8,10 @@ TERMINFO=$HOME/.terminfo tic -x tmux.terminfo
 rm -rf ~/.tmux.conf
 ln -s $(pwd)/tmux.conf $HOME/.tmux.conf
 
+# Install scripts.
+mkdir -p $HOME/.tmux
+ln -sf $(pwd)/window-name.sh $HOME/.tmux/window-name.sh
+
 # If on Mac, get also Mac specific settings
 if [[ $(uname) == 'Darwin' ]]; then
     brew install tmux reattach-to-user-namespace
