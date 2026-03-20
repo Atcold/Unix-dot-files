@@ -24,6 +24,11 @@ alias   .5='cd ../../../../../'
 alias screen-off="pmset displaysleepnow"
 alias ql="qlmanage -p &>/dev/null"  # brew install syntax-highlight
 alias bat="bat --paging=always"
+# t1–t5: show tree of current dir up to depth N (e.g. t2 shows 2 levels)
+_t() { local dir="$(basename "$PWD")"; (cd .. && tree -L "$1" "$dir"); }
+for i in 1 2 3 4 5; do
+  alias "t$i"="_t $i"
+done
 
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
