@@ -25,6 +25,10 @@ set statusline=[%n]%t[%{strlen(&fenc)?&fenc:'none'},%{&ff}]%h%m%r%y%=%c,%l/%L\ %
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 set termguicolors
 colorscheme base16-gruvbox-dark-hard
+hi SpellBad   gui=underline guifg=#fb4934 guibg=NONE guisp=NONE cterm=underline ctermbg=NONE
+hi SpellLocal gui=underline guifg=#8ec07c guibg=NONE guisp=NONE cterm=underline ctermbg=NONE
+"hi SpellCap   gui=underline guifg=#83a598 guibg=NONE guisp=NONE cterm=underline ctermbg=NONE
+"hi SpellRare  gui=underline guifg=#d3869b guibg=NONE guisp=NONE cterm=underline ctermbg=NONE
 
 " Markdown hack
 function! MathAndLiquid()
@@ -90,10 +94,7 @@ au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
 set spellfile=$HOME/Dropbox/Vim/Dics/en-TeX.utf-8.add
 set spelllang=en_gb
-hi SpellBad   cterm=underline gui=underline ctermbg=NONE guibg=NONE
-hi SpellCap   cterm=underline gui=underline ctermbg=NONE guibg=NONE
-hi SpellRare  cterm=underline gui=underline ctermbg=NONE guibg=NONE
-hi SpellLocal cterm=underline gui=underline ctermbg=NONE guibg=NONE
+
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
