@@ -1,29 +1,28 @@
 # Improvind Bash ###############################################################
-alias grep="grep --colour='auto'"
-alias ls='gls -v --color=auto'
-alias ll="ls -l"
-alias l="ls -CF"
+alias grep='grep --colour=always'
+alias ls='gls -v --color=always'
+alias ll='ls -l'
+alias l='ls -CF'
 alias ip='ipython --no-banner'
 alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
-alias latex-update="sudo tlmgr update --self --all --reinstall-forcibly-removed"
-alias py="python"
+alias latex-update='sudo tlmgr update --self --all --reinstall-forcibly-removed'
+alias py='python'
 alias jn='jupyter notebook'
 alias jl='jupyter lab'
-alias pl="ip --pylab"
-alias eject="diskutil eject"
-alias skim="open -a /Applications/Skim.app"
-alias preview="open -a /Applications/Preview.app"
-alias PPUU="conda activate PPUU"
+alias pl='ip --pylab'
+alias eject='diskutil eject'
+alias skim='open -a /Applications/Skim.app'
+alias preview='open -a /Applications/Preview.app'
 alias   ..='cd ../'
 alias  ...='cd ../../'
 alias ....='cd ../../../'
 alias   .3='cd ../../../'
 alias   .4='cd ../../../../'
 alias   .5='cd ../../../../../'
-alias screen-off="pmset displaysleepnow"
-alias ql="qlmanage -p &>/dev/null"  # brew install syntax-highlight
-alias bat="bat --paging=always"
+alias screen-off='pmset displaysleepnow'
+alias ql='qlmanage -p &>/dev/null'  # brew install syntax-highlight
+alias bat='bat --paging=always'
 # t1–t5: show tree of current dir up to depth N (e.g. t2 shows 2 levels)
 _t() { local dir="$(basename "$PWD")"; (cd .. && tree -L "$1" "$dir"); }
 for i in 1 2 3 4 5; do
