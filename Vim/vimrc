@@ -90,6 +90,10 @@ au FileType tex,bib let b:delimitMate_matchpairs = "<:>,(:),[:],{:},`:'"
 au FileType tex,bib let b:delimitMate_smart_matchpairs = '^\%(\w\|\!\|[£]\|[^[:space:][:punct:]]\)'
 set spellfile=$HOME/Dropbox/Vim/Dics/en-TeX.utf-8.add
 set spelllang=en_gb
+hi SpellBad   cterm=underline gui=underline ctermbg=NONE guibg=NONE
+hi SpellCap   cterm=underline gui=underline ctermbg=NONE guibg=NONE
+hi SpellRare  cterm=underline gui=underline ctermbg=NONE guibg=NONE
+hi SpellLocal cterm=underline gui=underline ctermbg=NONE guibg=NONE
 
 " Expand <CR>
 let delimitMate_expand_cr = 1
