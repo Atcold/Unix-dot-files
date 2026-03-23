@@ -18,7 +18,7 @@
 [push]
     default = simple
 [alias]
-    lg  = !"git lg1-specific"
+    lg  = !"git -c color.ui=always lg1-specific"
     lg1 = !"git lg1-specific --all"
     lg2 = !"git lg2-specific --all"
     lg3 = !"git lg3-specific --all"
