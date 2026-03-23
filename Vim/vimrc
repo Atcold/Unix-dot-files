@@ -123,9 +123,9 @@ hi def link luaFuncKeyword Function
 hi def link luaFuncCall Normal
 
 " Configure GitGutter plugin: add / checkout / diff
-nmap <Leader>ha <Plug>GitGutterStageHunk
-nmap <Leader>hc <Plug>GitGutterUndoHunk
-nmap <Leader>hd <Plug>GitGutterPreviewHunk
+nmap <Leader>ha <Plug>(GitGutterStageHunk)
+nmap <Leader>hc <Plug>(GitGutterUndoHunk)
+nmap <Leader>hd <Plug>(GitGutterPreviewHunk)
 
 " Configure Jupytext plugin
 let g:jupytext_fmt = 'py:percent'
