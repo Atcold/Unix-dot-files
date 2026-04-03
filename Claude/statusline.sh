@@ -8,8 +8,14 @@ MODEL=$(echo "$input" | jq -r '.model.display_name // "Claude"' | tr -d ' ')
 MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | cut -d. -f1)
 DURATION=$(printf "%d:%02d" $((MS / 3600000)) $(((MS % 3600000) / 60000)))
 
-# Abbreviate home dir
-SHORT_DIR="${DIR/#$HOME/~}"
+# Show path from project root (e.g. .settings/Mac); fall back to basename of current dir
+PROJECT_DIR=$(echo "$input" | jq -r '.workspace.project_dir // empty')
+if [ -n "$PROJECT_DIR" ]; then
+    REL="${DIR#$PROJECT_DIR}"
+    SHORT_DIR="$(basename "$PROJECT_DIR")${REL}"
+else
+    SHORT_DIR=$(basename "$DIR")
+fi
 
 # Git branch + dirty indicator
 GIT_INFO=""
