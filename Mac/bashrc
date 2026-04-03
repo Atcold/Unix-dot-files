@@ -1,6 +1,6 @@
 # Improvind Bash ###############################################################
 alias grep='grep --colour=auto'
-alias ls='gls -v --color=auto'
+alias ls='gls -vX --color=auto'
 alias ll='ls -l'
 alias l='ls -CF'
 alias ip='ipython --no-banner'
