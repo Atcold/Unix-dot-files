@@ -97,6 +97,10 @@ if [ -f $(brew --prefix)/etc/bash_completion ]
 then
     source $(brew --prefix)/etc/bash_completion
 fi
+# If there are multiple matches for completion, Tab should cycle through them
+bind 'TAB:menu-complete'
+# And Shift-Tab should cycle backwards
+bind '"\e[Z": menu-complete-backward'
 
 # Fix Catalina zsh shit warning
 export BASH_SILENCE_DEPRECATION_WARNING=1
