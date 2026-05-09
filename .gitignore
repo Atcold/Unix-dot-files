@@ -2,3 +2,7 @@
 /Vim/vim/bundle/
 Vim/vim/.netrwhist
 .DS_Store
+
+# Python bytecode (ranger compiles its colorscheme/plugin into the repo dir)
+__pycache__/
+*.pyc
