@@ -42,3 +42,5 @@
 	name = jupyter notebook merge driver
 [pull]
 	rebase = true
+[core]
+	quotepath = false
