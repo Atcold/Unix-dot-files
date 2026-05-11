@@ -14,10 +14,9 @@ ln -sf $(pwd)/window-name.sh $HOME/.tmux/window-name.sh
 
 # If on Mac, get also Mac specific settings
 if [[ $(uname) == 'Darwin' ]]; then
-    brew install tmux reattach-to-user-namespace
+    brew install tmux
     rm -rf ~/.tmux.mac.conf
     ln -s $(pwd)/tmux.mac.conf $HOME/.tmux.mac.conf
-    brew install reattach-to-user-namespace
 fi
 
 echo 'Done.'
