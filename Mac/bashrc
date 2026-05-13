@@ -102,12 +102,16 @@ bind 'TAB:menu-complete'
 # And Shift-Tab should cycle backwards (vi-insert keymap: \e otherwise drops
 # us into command mode before the [Z arrives)
 bind -m vi-insert '"\e[Z": menu-complete-backward'
+# Ctrl-W deletes back to the previous non-alphanumeric (e.g. /), like Vim —
+# instead of the default unix-word-rubout which eats the whole path
+bind -m vi-insert '"\C-w": backward-kill-word'
 
 # Fuzzy completion via fzf (brew install fzf && $(brew --prefix)/opt/fzf/install)
-# - **<Tab> → fuzzy-pick anywhere a path is expected (e.g. ln -s ~/Work/**<Tab>)
+# - Tab     → fuzzy-pick (empty FZF_COMPLETION_TRIGGER means no ** prefix needed)
 # - Ctrl-T  → fuzzy-find a file/dir and paste it into the current command
 # - Ctrl-R  → fuzzy history search
 # - Alt-C   → fuzzy cd into a subdir
+export FZF_COMPLETION_TRIGGER=''
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
 # Fix Catalina zsh shit warning
