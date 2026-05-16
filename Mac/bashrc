@@ -97,8 +97,9 @@ if [ -f $(brew --prefix)/etc/bash_completion ]
 then
     source $(brew --prefix)/etc/bash_completion
 fi
-# If there are multiple matches for completion, Tab should cycle through them
-bind 'TAB:menu-complete'
+# On Tab, fill the longest common prefix and list all matches at once
+# (default `complete`, made eager so it shows the list instead of beeping)
+bind 'set show-all-if-ambiguous on'
 # And Shift-Tab should cycle backwards (vi-insert keymap: \e otherwise drops
 # us into command mode before the [Z arrives)
 bind -m vi-insert '"\e[Z": menu-complete-backward'
@@ -107,11 +108,10 @@ bind -m vi-insert '"\e[Z": menu-complete-backward'
 bind -m vi-insert '"\C-w": backward-kill-word'
 
 # Fuzzy completion via fzf (brew install fzf && $(brew --prefix)/opt/fzf/install)
-# - Tab     → fuzzy-pick (empty FZF_COMPLETION_TRIGGER means no ** prefix needed)
+# - **<Tab> → fuzzy-pick anywhere a path is expected (e.g. ln -s ~/Work/**<Tab>)
 # - Ctrl-T  → fuzzy-find a file/dir and paste it into the current command
 # - Ctrl-R  → fuzzy history search
 # - Alt-C   → fuzzy cd into a subdir
-export FZF_COMPLETION_TRIGGER=''
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
 # Fix Catalina zsh shit warning
