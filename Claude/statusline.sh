@@ -67,8 +67,8 @@ if [ -n "$usage_result" ]; then
     [ $filled -gt 10 ] && filled=10
     empty=$((10 - filled))
     bar=""
-    i=0; while [ $i -lt $filled ]; do bar="${bar}▓"; i=$((i+1)); done
-    i=0; while [ $i -lt $empty ]; do bar="${bar}░"; i=$((i+1)); done
+    i=0; while [ $i -lt $filled ]; do bar="${bar}◼"; i=$((i+1)); done
+    i=0; while [ $i -lt $empty ]; do bar="${bar}◻"; i=$((i+1)); done
 
     # Reset time (24h)
     reset_display=""
@@ -90,7 +90,7 @@ if [ -n "$usage_result" ]; then
     else                                  USAGE_COLOR=$'\033[38;5;160m'  # red
     fi
 
-    USAGE_TEXT="${USAGE_COLOR}${utilization}% ${bar}${reset_display}"
+    USAGE_TEXT=$'\033[2m'"${USAGE_COLOR}${utilization}% ${bar}${reset_display}"
 fi
 
 # --- Colours ---
