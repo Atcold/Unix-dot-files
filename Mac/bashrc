@@ -107,12 +107,12 @@ bind -m vi-insert '"\e[Z": menu-complete-backward'
 # instead of the default unix-word-rubout which eats the whole path
 bind -m vi-insert '"\C-w": backward-kill-word'
 
-# Fuzzy completion via fzf (brew install fzf && $(brew --prefix)/opt/fzf/install)
+# Fuzzy completion via fzf (brew install fzf — handled by install.sh)
 # - **<Tab> → fuzzy-pick anywhere a path is expected (e.g. ln -s ~/Work/**<Tab>)
 # - Ctrl-T  → fuzzy-find a file/dir and paste it into the current command
 # - Ctrl-R  → fuzzy history search
 # - Alt-C   → fuzzy cd into a subdir
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+command -v fzf >/dev/null && eval "$(fzf --bash)"
 
 # Fix Catalina zsh shit warning
 export BASH_SILENCE_DEPRECATION_WARNING=1
