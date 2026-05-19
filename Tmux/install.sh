@@ -17,6 +17,7 @@ if [[ $(uname) == 'Darwin' ]]; then
     brew install tmux
     rm -rf ~/.tmux.mac.conf
     ln -s $(pwd)/tmux.mac.conf $HOME/.tmux.mac.conf
+    ln -sf $(pwd)/battery.sh $HOME/.tmux/battery.sh
 fi
 
 echo 'Done.'
