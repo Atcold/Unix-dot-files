@@ -2,6 +2,7 @@ echo 'Installing essential command line tools'
 
 brew install bash git coreutils pdfgrep bash-completion rename htop wget miniconda ranger tree fzf rclone gh
 brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avidemux languagetool
+brew install font-caskaydia-cove-nerd-font  # terminal Nerd Font (icon glyphs + ligatures)
 brew tap hamed-elfayome/claude-usage
 brew install claude-usage-tracker mac-mouse-fix
 

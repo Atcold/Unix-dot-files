@@ -1,4 +1,6 @@
 #	Reconstructed via infocmp from file: /usr/share/terminfo/t/tmux
+# Se patched: \E[0 q (terminal default) instead of \E[2 q (steady block), so Neovim
+# restores the cursor on exit rather than leaving a stuck block. Applies to both entries.
 tmux|tmux terminal multiplexer,
 	OTbs, OTpt, am, hs, km, mir, msgr, xenl, AX, G0,
 	colors#8, cols#80, it#8, lines#24, pairs#64, U8#1,
@@ -27,7 +29,7 @@ tmux|tmux terminal multiplexer,
 	sgr0=\E[m\017, sitm=\E[3m, smacs=^N, smcup=\E[?1049h,
 	smir=\E[4h, smkx=\E[?1h\E=, smso=\E[7m, smul=\E[4m,
 	tbc=\E[3g, tsl=\E]0;, Cr=\E]112\007, Cs=\E]12;%p1%s\007,
-	E0=\E(B, Ms@, S0=\E(%p1%c, Se=\E[2 q, Ss=\E[%p1%d q,
+	E0=\E(B, Ms@, S0=\E(%p1%c, Se=\E[0 q, Ss=\E[%p1%d q,
 	TS=\E]0;,
 #	Reconstructed via infocmp from file: /usr/share/terminfo/t/tmux-256color
 tmux-256color|tmux with 256 colors,
@@ -59,4 +61,4 @@ tmux-256color|tmux with 256 colors,
 	sgr0=\E[m\017, sitm=\E[3m, smacs=^N, smcup=\E[?1049h,
 	smir=\E[4h, smkx=\E[?1h\E=, smso=\E[7m, smul=\E[4m,
 	tbc=\E[3g, tsl=\E]0;, Cr=\E]112\007, Cs=\E]12;%p1%s\007,
-	E0=\E(B, S0=\E(%p1%c, Se=\E[2 q, Ss=\E[%p1%d q, TS=\E]0;,
+	E0=\E(B, S0=\E(%p1%c, Se=\E[0 q, Ss=\E[%p1%d q, TS=\E]0;,
