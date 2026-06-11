@@ -64,6 +64,10 @@ require("lazy").setup({
         },
       },
       ui = { enable = false },
+      -- Don't let obsidian.nvim inject/rewrite `id/aliases/tags` frontmatter on every
+      -- save. This vault's convention is plain markdown with frontmatter only where it
+      -- has a function (see CLAUDE.md), so auto-frontmatter is unwanted noise.
+      frontmatter = { enabled = false },
     },
   },
 
@@ -102,6 +106,15 @@ vim.api.nvim_create_autocmd("FileType", {
       { buffer = true, silent = true, desc = "Next link" })
     vim.keymap.set("n", "[o", function() require("obsidian.api").nav_link("prev") end,
       { buffer = true, silent = true, desc = "Previous link" })
+    -- Follow a [[link]] in a vertical split (side-by-side) — the "open in new tab" feel.
+    -- \v from a link opens the target in a vsplit. We avoid a \o* mapping: \o is the
+    -- quick-switch key, so sharing that prefix would add timeoutlen lag to it.
+    vim.keymap.set("n", "<leader>v", "<cmd>Obsidian follow_link vsplit<cr>",
+      { buffer = true, silent = true, desc = "Follow [[link]] in vsplit" })
+    -- Ctrl-W ] mirrors Vim's "jump to tag in a horizontal split", but for [[links]].
+    -- Buffer-local, so it only shadows the builtin in markdown where we follow wikilinks.
+    vim.keymap.set("n", "<C-w>]", "<cmd>Obsidian follow_link hsplit<cr>",
+      { buffer = true, silent = true, desc = "Follow [[link]] in hsplit" })
   end,
 })
 
@@ -111,5 +124,10 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   callback = function()
     vim.opt_local.conceallevel = 2
     vim.opt_local.concealcursor = "nc"
+    -- Typing @ inserts the character and fires insert-mode file-path completion
+    -- (i_CTRL-X_CTRL-F), so @Areas/Cooking/... can be tab-completed inline. Paths are
+    -- relative to nvim's cwd, so launch nvim from the vault root for them to resolve.
+    vim.keymap.set("i", "@", "@<C-x><C-f>",
+      { buffer = true, silent = true, desc = "@ + file-path completion" })
   end,
 })
