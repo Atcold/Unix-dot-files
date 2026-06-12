@@ -33,6 +33,25 @@ require("lazy").setup({
     },
   },
 
+  -- Completion engine. obsidian.nvim no longer ships its own completion source; it
+  -- runs an in-process LSP (obsidian-ls) and leaves the UI to a real engine. blink's
+  -- default sources include "lsp", so typing `[[` in a markdown buffer fuzzy-completes
+  -- note names and accepting inserts a fully-closed [[link]] — no manual `]]` needed.
+  {
+    "saghen/blink.cmp",
+    version = "*",  -- release tag ships the prebuilt fuzzy-matcher binary; no Rust build
+    event = "InsertEnter",
+    opts = {
+      -- "enter" preset: Enter accepts the highlighted item, <C-n>/<C-p> or arrows move,
+      -- <C-e> dismisses. Enter still inserts a newline when the menu is closed.
+      keymap = { preset = "enter" },
+      -- Only the obsidian-ls LSP (fires on `[[` and `#`) and path completion. No
+      -- "buffer" source: that completes words already in the buffer, which spams a
+      -- dictionary-like popup on ordinary prose.
+      sources = { default = { "lsp", "path" } },
+    },
+  },
+
   -- Obsidian vault: follow [[wikilinks]], backlinks, link/tag completion.
   -- UI is left to render-markdown.nvim (ui.enable = false avoids a double-render clash).
   {
