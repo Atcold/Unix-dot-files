@@ -18,6 +18,11 @@ vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
 vim.opt.softtabstop = 4
 
+-- Enable Neovim's bundled markdown section folding (foldexpr=MarkdownFold). Must be set
+-- before the markdown ftplugin runs. This is also what lets obsidian's Smart Action fold
+-- a heading on <CR> (it checks vim.g.markdown_folding) instead of falling through.
+vim.g.markdown_folding = 1
+
 -- Plugins
 require("lazy").setup({
   {
@@ -73,8 +78,12 @@ require("lazy").setup({
       { "ibhagwan/fzf-lua", opts = { winopts = { fullscreen = true } } },
     },
     init = function()
-      -- Keep <CR> as a plain Return; we follow links with <C-]>, not Smart Action.
-      vim.g.obsidian_default_keymap = false
+      -- Smart Action on <CR>: in a markdown buffer Return follows a [[link]] under the
+      -- cursor, toggles a - [ ] checkbox, folds a heading, else behaves as a plain Return.
+      -- This is the *only* mapping the flag gates; <C-]> still follows links too.
+      -- (Was disabled before because the checkbox toggle bumped - [ ] to - [~] instead
+      -- of ticking — that was the 5-state default order, now fixed by checkbox.order below.)
+      vim.g.obsidian_default_keymap = true
     end,
     opts = {
       legacy_commands = false,  -- use the new `:Obsidian <subcommand>` form
@@ -86,6 +95,13 @@ require("lazy").setup({
         },
       },
       ui = { enable = false },
+      -- Binary checkbox toggle: blank <-> x. Obsidian's default cycles a 5-state
+      -- ladder { " ", "~", "!", ">", "x" }, so one <CR> bumped - [ ] to - [~] instead
+      -- of ticking it. We only ever want done/not-done here.
+      -- create_new = false: the Smart Action only toggles an *existing* checkbox. With the
+      -- default (true) it would manufacture a checkbox on any line — e.g. <CR> on a heading
+      -- (when folding is off) turned the title into a - [ ] box.
+      checkbox = { order = { " ", "x" }, create_new = false },
       -- Don't let obsidian.nvim inject/rewrite `id/aliases/tags` frontmatter on every
       -- save. This vault's convention is plain markdown with frontmatter only where it
       -- has a function (see CLAUDE.md), so auto-frontmatter is unwanted noise.
@@ -114,6 +130,10 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.wrap = true
     vim.opt_local.linebreak = true
     vim.opt_local.spell = false
+    -- Folding is enabled (vim.g.markdown_folding) but start every note fully open;
+    -- <CR> on a heading then folds that one section on demand, rather than the whole
+    -- note opening collapsed.
+    vim.opt_local.foldlevel = 99
     -- Syntax highlighting via Neovim's bundled markdown treesitter. We dropped the
     -- nvim-treesitter plugin: its master branch is incompatible with nvim 0.12 and
     -- crashed on code-fence language injections (e.g. ```bash in gog-setup.md).
