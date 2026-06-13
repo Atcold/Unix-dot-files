@@ -60,9 +60,12 @@ require("lazy").setup({
     ft = "markdown",
     cmd = "Obsidian",  -- also load on :Obsidian, so it works with no .md buffer open
     keys = {
-      -- \o = quick-switch a note by name, the Obsidian ⌘O equivalent. Global, so it
-      -- works from any buffer (or none); pressing it lazy-loads obsidian.
-      { "<leader>o", "<cmd>Obsidian quick_switch<cr>", desc = "Quick-switch note (Obsidian)" },
+      -- \o… = Obsidian group. All global, so they work from any buffer (or none);
+      -- pressing any of them lazy-loads obsidian. \o is now a prefix, not a mapping,
+      -- so there's no bare-\o wait — \oo/\os/\oa fire as fast as you type them.
+      { "<leader>oo", "<cmd>Obsidian quick_switch<cr>", desc = "Open note by name" },
+      { "<leader>os", "<cmd>Obsidian search<cr>",       desc = "Search vault contents" },
+      { "<leader>oa", "<cmd>Obsidian open<cr>",         desc = "Open current note in Obsidian app" },
     },
     dependencies = {
       "nvim-lua/plenary.nvim",
