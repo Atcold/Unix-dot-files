@@ -74,6 +74,17 @@ require("lazy").setup({
       -- pressing any of them lazy-loads obsidian. \o is now a prefix, not a mapping,
       -- so there's no bare-\o wait — \oo/\os/\oa fire as fast as you type them.
       { "<leader>oo", "<cmd>Obsidian quick_switch<cr>", desc = "Open note by name" },
+      -- Same picker as \oo, but open the chosen note in a new tab. quick_switch has no
+      -- "tab" flag, so call the picker directly and route the selection through
+      -- api.open_note(path, "tabedit") — the 2nd arg is the :open command (default "e").
+      { "<leader>oO", function()
+          Obsidian.picker.find_notes({
+            prompt_title = "Quick Switch (new tab)",
+            callback = function(path)
+              require("obsidian.api").open_note(path, "tabedit")
+            end,
+          })
+        end, desc = "Open note by name in a new tab" },
       { "<leader>os", "<cmd>Obsidian search<cr>",       desc = "Search vault contents" },
       { "<leader>oa", "<cmd>Obsidian open<cr>",         desc = "Open current note in Obsidian app" },
     },
