@@ -29,6 +29,11 @@ require("lazy").setup({
     "MeanderingProgrammer/render-markdown.nvim",
     opts = {
       render_modes = true,  -- render in all modes
+      -- Size table columns to the *visual* width, not the raw markdown. Default 'padded'
+      -- pads each column to the raw cell span, so a concealed [[target|alias]] wikilink
+      -- (long source, short rendered icon+alias) leaves a big trailing gap. 'trimmed'
+      -- subtracts the concealed empty space from the width calculation.
+      pipe_table = { cell = "trimmed" },
       -- Reveal the cursor line's raw markup only while editing it (insert mode);
       -- keep it rendered in normal/visual/command so reading stays clean.
       -- Two layers must agree: anti_conceal covers drawn glyphs (headings, bullets);
