@@ -21,3 +21,7 @@ if [[ $(uname) == 'Darwin' ]]; then
 fi
 
 echo 'Done.'
+echo
+echo 'NOTE: a running tmux server caches the old terminfo. To apply the cursor-shape'
+echo 'fix (block no longer sticks after leaving Neovim), detach/save your work then:'
+echo '  tmux kill-server   # then reattach to pick up the freshly tic-ed terminfo'
