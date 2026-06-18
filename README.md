@@ -15,13 +15,13 @@ This goal is not too ambitious since we are starting from my personal settings (
 Clone the repository
 
 ```bash
-git clone https://github.com/Atcold/Unix-dot-files.git
+git clone https://github.com/Atcold/Unix-dot-files.git ~/.settings
 ```
 
 Then, after having chosen the subfolder of interest (say for example [`Vim`](https://github.com/Atcold/Unix-dot-files/tree/master/Vim))
 
 ```bash
-cd Unix-dot-files
+cd ~/.settings
 cd Vim
 ./install.sh
 ```
@@ -29,6 +29,24 @@ cd Vim
 Don't forget to backup your previous configuration, since it will be overwritten.
 
 Installation is required once only. Then you will simply need to pull in any new update.
+
+
+## Modernisation (work in progress)
+
+I'm experimenting with a more modern terminal stack. Candidates under consideration:
+
+- `eza` as the `ls` replacement (icons via the Nerd Font) — **already in.**
+- `bash-completion@2` instead of the stale v1 we currently source; \
+  possibly `carapace` on top for broader, any-command flag completion.
+- [Ghostty](https://ghostty.org/) as the terminal, with `tmux` fixed to pass through all SGR codes (strikethrough, etc.).
+- `nvim` superseding `vim`.
+
+**Escape hatch:** the last known-good configuration is tagged `stable`. To revert at any time:
+
+```bash
+git checkout stable      # inspect / reinstall the old config
+git checkout master      # back to the bleeding edge
+```
 
 
 # Better colours

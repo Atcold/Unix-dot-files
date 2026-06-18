@@ -1,8 +1,10 @@
 # Improvind Bash ###############################################################
 alias grep='grep --colour=auto'
-alias ls='gls -vX --color=auto'
-alias ll='ls -l'
-alias l='ls -CF'
+alias ls='eza --icons=auto --group-directories-first --sort=extension'
+alias ll='eza -l --icons=auto --git --group-directories-first --sort=extension'
+alias l='eza --icons=auto -F --group-directories-first --sort=extension'
+alias lt='eza --tree --icons=auto --level=2 --group-directories-first'
+alias lsv='gls -vX --color=auto'  # GNU ls with natural version sort
 alias ip='ipython --no-banner'
 alias pip-update="pip install --upgrade pip && pip freeze --local | grep -v \
 '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U"
@@ -92,10 +94,10 @@ export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 set -o vi
 export EDITOR="vim"
 
-# Essential bash completion
-if [ -f $(brew --prefix)/etc/bash_completion ]
+# Essential bash completion (bash-completion@2 — needs bash 4.2+)
+if [ -r $(brew --prefix)/etc/profile.d/bash_completion.sh ]
 then
-    source $(brew --prefix)/etc/bash_completion
+    source $(brew --prefix)/etc/profile.d/bash_completion.sh
 fi
 # On Tab, fill the longest common prefix and list all matches at once
 # (default `complete`, made eager so it shows the list instead of beeping)
