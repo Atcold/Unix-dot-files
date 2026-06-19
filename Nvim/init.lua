@@ -134,6 +134,23 @@ require("lazy").setup({
   { "Mofiqul/dracula.nvim" },
   { "EdenEast/nightfox.nvim" },
   { "tanvirtin/monokai.nvim" },
+
+  -- Tree-sitter parsers ONLY (no highlight plugin). Neovim 0.12 bundles markdown +
+  -- markdown_inline but not language parsers, so ```bash / ```python code fences stay
+  -- one flat colour: the markdown injection query resolves the fence language but has
+  -- no parser to inject into. We use the plugin's `main` branch (the 0.11+ rewrite) —
+  -- the old `master` branch is what broke on 0.12. It just drops the .so files on the
+  -- runtimepath; highlighting is still driven by our own `vim.treesitter.start()` in
+  -- the markdown FileType autocmd below. Add languages to the install list as needed.
+  {
+    "nvim-treesitter/nvim-treesitter",
+    branch = "main",
+    build = ":TSUpdate",
+    lazy = false,
+    config = function()
+      require("nvim-treesitter").install({ "bash", "python" })
+    end,
+  },
 })
 
 -- Default colour scheme; flip live with :colorscheme <name>.
