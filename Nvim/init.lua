@@ -176,6 +176,26 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- Project notes open with their "## Log" section folded. Folding is on globally
+-- (vim.g.markdown_folding) but notes start fully open (foldlevel = 99 above); here we
+-- close just the one Log fold so the timestamped history sits out of the way while the
+-- goal/status/next-action stay visible. Fires on BufWinEnter so a window (and its folds)
+-- exists; <CR> on the heading reopens it. Pattern matches the vault's Projects/ dir.
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  pattern = "*/Projects/*.md",
+  callback = function(args)
+    local lines = vim.api.nvim_buf_get_lines(args.buf, 0, -1, false)
+    for lnum, line in ipairs(lines) do
+      if line:match("^## Log%s*$") then
+        -- zx recomputes folds (foldexpr is lazy), then close the fold at that line.
+        vim.cmd("normal! zx")
+        pcall(vim.cmd, lnum .. "foldclose")
+        break
+      end
+    end
+  end,
+})
+
 -- Conceal on by default for the Claude channel file
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = "cc.md",
