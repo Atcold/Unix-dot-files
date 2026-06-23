@@ -6,11 +6,9 @@
 -- for any vault, not just md-Wiki.
 local M = {}
 
-local function render()
-  if vim.fn.argc() ~= 0 then return end                 -- a file was passed: don't intrude
-  if vim.fn.isdirectory(vim.fn.getcwd() .. "/.obsidian") ~= 1 then return end  -- only at a vault root
-  if vim.api.nvim_buf_get_name(0) ~= "" or vim.bo.modified then return end  -- only the empty startup buffer
-
+-- Build and show the welcome buffer unconditionally — used on demand via \oh / :ObsHome
+-- (the startup guards live in M.setup's VimEnter handler, not here).
+function M.open()
   -- Content as typed rows so each kind gets its own highlight group (extmarks below).
   -- Groups are colourscheme-defined (Title/Function/String/Comment), so this tracks
   -- whatever :colorscheme is active rather than hard-coding colours.
@@ -38,7 +36,7 @@ local function render()
     { kind = "key", key = "Ctrl-o",   desc = "Jump back" },
     { kind = "key", key = "gx",       desc = "Open URL under cursor in browser" },
     { kind = "blank" },
-    { kind = "footer",  text = "\\ is the leader key  ·  q to quit" },
+    { kind = "footer",  text = "\\ is the leader key  ·  \\oh home  ·  q to quit" },
   }
   local line_hl = { title = "Title", rule = "Comment", section = "Function", footer = "Comment" }
   local lines, marks = { "" }, {}  -- leading blank for top padding
@@ -76,7 +74,18 @@ local function render()
 end
 
 function M.setup()
-  vim.api.nvim_create_autocmd("VimEnter", { callback = render })
+  -- Auto-show only on a clean startup at a vault root; otherwise stay out of the way.
+  vim.api.nvim_create_autocmd("VimEnter", {
+    callback = function()
+      if vim.fn.argc() ~= 0 then return end                 -- a file was passed: don't intrude
+      if vim.fn.isdirectory(vim.fn.getcwd() .. "/.obsidian") ~= 1 then return end  -- only at a vault root
+      if vim.api.nvim_buf_get_name(0) ~= "" or vim.bo.modified then return end  -- only the empty startup buffer
+      M.open()
+    end,
+  })
+  -- Re-open the home screen on demand from any note: \oh or :ObsHome.
+  vim.keymap.set("n", "<leader>oh", M.open, { silent = true, desc = "Obsidian home (welcome screen)" })
+  vim.api.nvim_create_user_command("ObsHome", M.open, { desc = "Open the Obs-mode welcome screen" })
 end
 
 return M
