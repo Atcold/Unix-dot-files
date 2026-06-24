@@ -92,7 +92,8 @@ export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 
 # Use Vim key binding in Bash and editor
 set -o vi
-export EDITOR="vim"
+export EDITOR="nvim"
+export VISUAL="nvim"
 
 # Essential bash completion (bash-completion@2 — needs bash 4.2+)
 if [ -r $(brew --prefix)/etc/profile.d/bash_completion.sh ]
