@@ -32,7 +32,7 @@ function M.open()
     { kind = "key", key = "]o  [o",   desc = "Next · previous link" },
     { kind = "key", key = "Ctrl-]",   desc = "Follow [[link]]" },
     { kind = "key", key = "Ctrl-w ]", desc = "Follow link in a horizontal split" },
-    { kind = "key", key = "\\v",      desc = "Follow link in a vertical split" },
+    { kind = "key", key = "\\ov",     desc = "Follow link in a vertical split" },
     { kind = "key", key = "Ctrl-o",   desc = "Jump back" },
     { kind = "key", key = "gx",       desc = "Open URL under cursor in browser" },
     { kind = "blank" },

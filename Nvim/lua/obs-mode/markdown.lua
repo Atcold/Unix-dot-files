@@ -29,9 +29,9 @@ function M.setup()
       vim.keymap.set("n", "[o", function() require("obsidian.api").nav_link("prev") end,
         { buffer = true, silent = true, desc = "Previous link" })
       -- Follow a [[link]] in a vertical split (side-by-side) — the "open in new tab" feel.
-      -- \v from a link opens the target in a vsplit. We avoid a \o* mapping: \o is the
+      -- \ov from a link opens the target in a vsplit. We avoid a \o* mapping: \o is the
       -- quick-switch key, so sharing that prefix would add timeoutlen lag to it.
-      vim.keymap.set("n", "<leader>v", "<cmd>Obsidian follow_link vsplit<cr>",
+      vim.keymap.set("n", "<leader>ov", "<cmd>Obsidian follow_link vsplit<cr>",
         { buffer = true, silent = true, desc = "Follow [[link]] in vsplit" })
       -- Ctrl-W ] mirrors Vim's "jump to tag in a horizontal split", but for [[links]].
       -- Buffer-local, so it only shadows the builtin in markdown where we follow wikilinks.
