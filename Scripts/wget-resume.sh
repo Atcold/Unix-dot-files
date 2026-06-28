@@ -39,8 +39,8 @@ sending bytes but keeps the connection open) doesn't hang forever.
 
 ${BOLD}Usage:${RESET} ${CYAN}$0${RESET} ${YELLOW}<url>${RESET} ${DIM}[output]${RESET}
 
-If ${DIM}[output]${RESET} is omitted, the filename is derived from the URL
-(query string stripped).
+If ${DIM}[output]${RESET} is omitted, the file is saved to ~/Movies/ with a
+filename derived from the URL (query string stripped).
 EOF
   exit 1
 fi
@@ -51,7 +51,8 @@ URL=$1
 # query string (everything from the first `?` or `&` onward), leaving the
 # bare URL path. `basename` then gives just the filename.
 # Example: .../foo.zip?api-key=... -> foo.zip
-OUT=${2:-$(basename "${URL%%[?&]*}")}
+# With no [output] arg, default to ~/Movies/<filename>.
+OUT=${2:-$HOME/Movies/$(basename "${URL%%[?&]*}")}
 
 # Outer loop: keep retrying until wget exits cleanly (exit 0).
 while true; do
