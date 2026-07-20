@@ -125,7 +125,13 @@ M.specs = {
     build = ":TSUpdate",
     lazy = false,
     config = function()
-      require("nvim-treesitter").install({ "bash", "python" })
+      require("nvim-treesitter").install({
+        "bash", "python",
+        -- markdown itself, plus the languages embedded in book.md's raw HTML
+        -- blocks so treesitter injections highlight them instead of showing
+        -- flat text: html tags, <script> JS, and inline CSS.
+        "markdown", "markdown_inline", "html", "javascript", "css",
+      })
     end,
   },
 }
