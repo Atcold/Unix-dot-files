@@ -32,6 +32,16 @@ for i in 1 2 3 4 5; do
   alias "t$i"="_t $i"
 done
 
+# Bare `tmux` attaches to (or creates) a session named "Tmux", not "0"
+# `command` skips this function, so we call the real binary and not ourselves
+function tmux {
+    if [ $# -eq 0 ]; then
+        command tmux new-session -A -s Tmux
+    else
+        command tmux "$@"
+    fi
+}
+
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
 function nb {
