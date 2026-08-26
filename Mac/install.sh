@@ -1,10 +1,28 @@
 echo 'Installing essential command line tools'
 
-brew install bash git coreutils pdfgrep bash-completion@2 rename htop wget miniconda ranger tree fzf rclone gh eza
+brew install bash git coreutils pdfgrep bash-completion@2 rename htop wget miniconda ranger tree fzf rclone gh eza uv
 brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avidemux languagetool
 brew install font-caskaydia-cove-nerd-font  # terminal Nerd Font (icon glyphs + ligatures)
 brew tap hamed-elfayome/claude-usage
 brew install claude-usage-tracker mac-mouse-fix
+
+echo 'Done.'
+
+
+echo 'Adding the pinyin letters to the terminal font'
+
+# Cascadia Code covers U+01CD/U+01CE and then stops, so the third tone of i, o and u and
+# all four tones of ü have no glyph -- the terminal substitutes a proportional face
+# mid-word and the column drifts. The patch assembles them from pieces the font already
+# has and writes a "... Pinyin" family beside the original, which is the family
+# Monokai.terminal asks for. uv supplies fonttools without installing it system-wide.
+FONT="$HOME/Library/Fonts/CaskaydiaCoveNerdFont-Light.ttf"
+if [ -f "$FONT" ]; then
+    uv run --with fonttools --quiet python \
+        "$(dirname "$0")/../Scripts/patch_pinyin_font.py" "$FONT"
+else
+    echo "Skipping the pinyin patch: $FONT is not installed."
+fi
 
 echo 'Done.'
 
