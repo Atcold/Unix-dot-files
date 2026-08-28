@@ -48,7 +48,7 @@ if [ -z "$usage_result" ]; then
     if [ $? -eq 0 ] && [ -n "$swift_result" ]; then
         utilization=$(echo "$swift_result" | cut -d'|' -f1)
         resets_at=$(echo "$swift_result" | cut -d'|' -f2)
-        if [ -n "$utilization" ] && [ "$utilization" != "ERROR"* ]; then
+        if [ -n "$utilization" ] && [[ "$utilization" != ERROR* ]]; then
             usage_result="${utilization}|${resets_at}"
             { echo "TIMESTAMP=$(date +%s)"; echo "UTILIZATION=${utilization}"; echo "RESETS_AT=${resets_at}"; } > "$CACHE_FILE"
         fi
@@ -60,7 +60,13 @@ USAGE_TEXT=""
 if [ -n "$usage_result" ]; then
     utilization=$(echo "$usage_result" | cut -d'|' -f1)
     resets_at=$(echo "$usage_result" | cut -d'|' -f2)
+fi
 
+# Anything non-numeric (an ERROR string, a stale blank cache) would fail every
+# integer test below and fall through to the red branch — drop the block instead.
+case "$utilization" in ''|*[!0-9]*) usage_result="" ;; esac
+
+if [ -n "$usage_result" ]; then
     # Reset time → also gives us where we stand in the 5-hour window
     reset_epoch=""
     if [ -n "$resets_at" ] && [ "$resets_at" != "null" ]; then
@@ -88,8 +94,10 @@ if [ -n "$usage_result" ]; then
 
     # Pace colour (for the │ marker), mirroring the menu bar app's 6-tier spectrum:
     # project current burn rate out to the reset and colour by where it lands.
-    # Too early to tell (< 3% elapsed) or window over → neutral, same as the app's nil.
-    if [ $elapsed_pct -ge 3 ] && [ $elapsed_pct -lt 100 ]; then
+    # Too early to tell (< 30 min in) or window over → neutral, same as the app's nil.
+    # The floor matters: utilization is a whole percent, so a 9-minute-old window
+    # turns one prompt (1%) into 33 projected points and paints the marker red.
+    if [ $elapsed_pct -ge 10 ] && [ $elapsed_pct -lt 100 ]; then
         projected=$((utilization * 100 / elapsed_pct))
         if   [ $projected -lt  50 ]; then PACE_COLOR=$'\033[38;5;34m'   # comfortable, green
         elif [ $projected -lt  75 ]; then PACE_COLOR=$'\033[38;5;37m'   # on track,    teal
