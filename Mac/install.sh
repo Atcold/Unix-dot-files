@@ -16,7 +16,7 @@ echo 'Adding the pinyin letters to the terminal font'
 # mid-word and the column drifts. The patch assembles them from pieces the font already
 # has and writes a "... Pinyin" family beside the original, which is the family
 # Monokai.terminal asks for. uv supplies fonttools without installing it system-wide.
-FONT="$HOME/Library/Fonts/CaskaydiaCoveNerdFont-Light.ttf"
+FONT="$HOME/Library/Fonts/CaskaydiaCoveNerdFont-ExtraLight.ttf"
 if [ -f "$FONT" ]; then
     uv run --with fonttools --quiet python \
         "$(dirname "$0")/../Scripts/patch_pinyin_font.py" "$FONT"
