@@ -61,33 +61,68 @@ if [ -n "$usage_result" ]; then
     utilization=$(echo "$usage_result" | cut -d'|' -f1)
     resets_at=$(echo "$usage_result" | cut -d'|' -f2)
 
-    # Progress bar (10 blocks)
-    filled=$(( (utilization * 10 + 50) / 100 ))
-    [ $filled -lt 0 ] && filled=0
-    [ $filled -gt 10 ] && filled=10
-    empty=$((10 - filled))
-    bar=""
-    i=0; while [ $i -lt $filled ]; do bar="${bar}◼"; i=$((i+1)); done
-    i=0; while [ $i -lt $empty ]; do bar="${bar}◻"; i=$((i+1)); done
-
-    # Reset time (24h)
-    reset_display=""
+    # Reset time → also gives us where we stand in the 5-hour window
+    reset_epoch=""
     if [ -n "$resets_at" ] && [ "$resets_at" != "null" ]; then
         iso_time=$(echo "$resets_at" | sed 's/\.[0-9]*Z$//')
         reset_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%S" "$iso_time" "+%s" 2>/dev/null)
-        if [ -n "$reset_epoch" ]; then
-            sec=$((reset_epoch % 60))
-            [ $sec -ge 30 ] && reset_epoch=$((reset_epoch + 60 - sec)) || reset_epoch=$((reset_epoch - sec))
-            reset_time=$(date -r "$reset_epoch" "+%H:%M" 2>/dev/null)
-            [ -n "$reset_time" ] && reset_display=" → ${reset_time}"
-        fi
     fi
 
-    # Usage colour gradient
+    # Elapsed share of the window (percent), and the bar cell boundary it falls on
+    elapsed_pct=-1
+    marker=-1
+    if [ -n "$reset_epoch" ]; then
+        remaining=$((reset_epoch - $(date +%s)))
+        [ $remaining -lt 0 ] && remaining=0
+        [ $remaining -gt 18000 ] && remaining=18000
+        elapsed_pct=$(( (18000 - remaining) * 100 / 18000 ))
+        marker=$(( (elapsed_pct * 10 + 50) / 100 ))
+    fi
+
+    # Usage colour gradient (for the percentage)
     if   [ "$utilization" -le 30 ]; then USAGE_COLOR=$'\033[38;5;34m'   # green
     elif [ "$utilization" -le 60 ]; then USAGE_COLOR=$'\033[38;5;178m'  # yellow
     elif [ "$utilization" -le 80 ]; then USAGE_COLOR=$'\033[38;5;166m'  # orange
     else                                  USAGE_COLOR=$'\033[38;5;160m'  # red
+    fi
+
+    # Pace colour (for the │ marker), mirroring the menu bar app's 6-tier spectrum:
+    # project current burn rate out to the reset and colour by where it lands.
+    # Too early to tell (< 3% elapsed) or window over → neutral, same as the app's nil.
+    if [ $elapsed_pct -ge 3 ] && [ $elapsed_pct -lt 100 ]; then
+        projected=$((utilization * 100 / elapsed_pct))
+        if   [ $projected -lt  50 ]; then PACE_COLOR=$'\033[38;5;34m'   # comfortable, green
+        elif [ $projected -lt  75 ]; then PACE_COLOR=$'\033[38;5;37m'   # on track,    teal
+        elif [ $projected -lt  90 ]; then PACE_COLOR=$'\033[38;5;178m'  # warming,     yellow
+        elif [ $projected -lt 100 ]; then PACE_COLOR=$'\033[38;5;166m'  # pressing,    orange
+        elif [ $projected -lt 120 ]; then PACE_COLOR=$'\033[38;5;160m'  # critical,    red
+        else                              PACE_COLOR=$'\033[38;5;129m'  # runaway,     purple
+        fi
+    else
+        PACE_COLOR=$'\033[38;5;255m'  # white
+    fi
+
+    # Progress bar (10 blocks) with │ marking our position in the window
+    filled=$(( (utilization * 10 + 50) / 100 ))
+    [ $filled -lt 0 ] && filled=0
+    [ $filled -gt 10 ] && filled=10
+    MARKER=$'\033[22m'"${PACE_COLOR}│"$'\033[2m'"${USAGE_COLOR}"
+    bar=""
+    i=0
+    while [ $i -lt 10 ]; do
+        [ $i -eq $marker ] && bar="${bar}${MARKER}"
+        [ $i -lt $filled ] && bar="${bar}◼" || bar="${bar}◻"
+        i=$((i+1))
+    done
+    [ $marker -ge 10 ] && bar="${bar}${MARKER}"
+
+    # Reset time (24h), rounded to the nearest minute
+    reset_display=""
+    if [ -n "$reset_epoch" ]; then
+        sec=$((reset_epoch % 60))
+        [ $sec -ge 30 ] && rounded=$((reset_epoch + 60 - sec)) || rounded=$((reset_epoch - sec))
+        reset_time=$(date -r "$rounded" "+%H:%M" 2>/dev/null)
+        [ -n "$reset_time" ] && reset_display=" → ${reset_time}"
     fi
 
     USAGE_TEXT=$'\033[2m'"${USAGE_COLOR}${utilization}% ${bar}${reset_display}"
