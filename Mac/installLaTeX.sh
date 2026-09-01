@@ -1,6 +1,11 @@
 echo 'Installing LaTeX, TeXstudio, and PowerPoint plugin'
 
-brew install mactex texstudio
+brew install mactex
+
+# texstudio@all is the tap's build, bundling the dictionaries and the thesaurus.
+brew tap texstudio-org/texstudio
+brew trust texstudio-org/texstudio
+brew install texstudio@all
 
 if [ -d "/Applications/Microsoft PowerPoint.app" ]
 then
