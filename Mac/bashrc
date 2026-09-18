@@ -26,6 +26,9 @@ alias screen-off='pmset displaysleepnow'
 alias ql='qlmanage -p &>/dev/null'  # brew install syntax-highlight
 alias bat='bat --paging=always'
 alias cca='claude --permission-mode auto'  # Claude Code, auto mode
+# Claude Code from an SSH shell: its token lives in the login keychain, which
+# SSH sessions don't unlock — so unlock it (asks the Mac password), then run
+claude-ssh() { security unlock-keychain ~/Library/Keychains/login.keychain-db && claude "$@"; }
 # t1–t5: show tree of current dir up to depth N (e.g. t2 shows 2 levels)
 _t() { local dir="$(basename "$PWD")"; (cd .. && tree -L "$1" "$dir"); }
 for i in 1 2 3 4 5; do
