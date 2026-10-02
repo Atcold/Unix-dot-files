@@ -14,6 +14,8 @@ local vault_path = "/Users/atcold/Library/Mobile Documents/iCloud~md~obsidian/Do
 M.specs = {
   {
     "MeanderingProgrammer/render-markdown.nvim",
+    -- Icon provider: draws a language glyph beside a code block's name (```diff → icon + diff).
+    dependencies = { "nvim-tree/nvim-web-devicons" },
     opts = {
       render_modes = true,  -- render in all modes
       -- Size table columns to the *visual* width, not the raw markdown. Default 'padded'
@@ -127,6 +129,8 @@ M.specs = {
     config = function()
       require("nvim-treesitter").install({
         "bash", "python",
+        -- ```diff fences in cc.md: red/green - and + lines.
+        "diff",
         -- markdown itself, plus the languages embedded in book.md's raw HTML
         -- blocks so treesitter injections highlight them instead of showing
         -- flat text: html tags, <script> JS, and inline CSS.
