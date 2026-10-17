@@ -1,3 +1,9 @@
+# ble.sh: syntax colouring and history suggestions while typing. Loaded first,
+# attached at the very end (after vi mode, binds and prompt). Install:
+#   curl -L https://github.com/akinomyoga/ble.sh/releases/download/nightly/ble-nightly.tar.xz | tar xJf -
+#   bash ble-nightly/ble.sh --install ~/.local/share
+[[ $- == *i* && -f ~/.local/share/blesh/ble.sh ]] && source ~/.local/share/blesh/ble.sh --attach=none
+
 # Improvind Bash ###############################################################
 alias grep='grep --colour=auto'
 alias ls='eza --icons=auto --group-directories-first --sort=extension'
@@ -129,7 +135,12 @@ bind -m vi-insert '"\C-w": backward-kill-word'
 # - Ctrl-T  → fuzzy-find a file/dir and paste it into the current command
 # - Ctrl-R  → fuzzy history search
 # - Alt-C   → fuzzy cd into a subdir
-command -v fzf >/dev/null && eval "$(fzf --bash)"
+if [[ ${BLE_VERSION-} ]]; then           # under ble.sh, its own fzf integration
+    ble-import -d integration/fzf-completion
+    ble-import -d integration/fzf-key-bindings
+else
+    command -v fzf >/dev/null && eval "$(fzf --bash)"
+fi
 
 # Fix Catalina zsh shit warning
 export BASH_SILENCE_DEPRECATION_WARNING=1
@@ -143,7 +154,9 @@ function parse_git_dirty {
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/⎇ \1$(parse_git_dirty)/"
 }
-export PS1="\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \
+# After `clear` in tmux, ble.sh can redraw the first line one column over. The leading
+# `\r` returns to column 1; `\[` and `\]` mark it as zero-width for prompt layout.
+export PS1="\[\r\]\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \
 \[\e[1;33m\]\w\[\e[0m\] \[\e[2m\]\$(parse_git_branch)\[\e[0m\]\n\[\e[1;32m\]$\[\e[0m\] "
 export PS2="\[\e[1;31m\]>\[\e[0m\] "
 export PAGER="less -R"
@@ -197,3 +210,17 @@ export PATH="$PATH:/Users/atcold/.lmstudio/bin"
 export PATH="$PATH:$HOME/go/bin"
 
 #eval "$(gh copilot alias -- bash)"
+
+# ble.sh: attach last (see the top of this file); no "-- INSERT --" line
+if [[ ${BLE_VERSION-} ]]; then
+    bleopt keymap_vi_mode_show:=   # ':=' because the vi keymap loads later
+    bleopt complete_auto_complete:=   # no grey suggestions while typing; Tab still completes
+    # Cursor: block in normal and visual mode, bar | in insert mode
+    function blerc/vi-cursors {
+        ble-bind -m vi_nmap --cursor 2
+        ble-bind -m vi_xmap --cursor 2
+        ble-bind -m vi_imap --cursor 5
+    }
+    blehook/eval-after-load keymap_vi blerc/vi-cursors
+    ble-attach
+fi
