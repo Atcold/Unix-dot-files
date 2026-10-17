@@ -428,6 +428,10 @@
 		<string>[33~</string>
 		<key>~F712</key>
 		<string>[34~</string>
+		<key>~F72C</key>
+		<string>[5;3~</string>
+		<key>~F72D</key>
+		<string>[6;3~</string>
 		<key>~^F728</key>
 		<string>[3;5~</string>
 	</dict>
