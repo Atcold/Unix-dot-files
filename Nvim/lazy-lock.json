@@ -3,6 +3,7 @@
   "catppuccin": { "branch": "main", "commit": "edefef779ab08ce1a4a404713e3012b0d202bd35" },
   "dracula.nvim": { "branch": "main", "commit": "ae752c13e95fb7c5f58da4b5123cb804ea7568ee" },
   "fzf-lua": { "branch": "main", "commit": "d5c12c6d72ed84554f0f8dacb84f20da094b6a2d" },
+  "jupytext.nvim": { "branch": "main", "commit": "c8baf3ad344c59b3abd461ecc17fc16ec44d0f7b" },
   "lazy.nvim": { "branch": "main", "commit": "306a05526ada86a7b30af95c5cc81ffba93fef97" },
   "monokai.nvim": { "branch": "master", "commit": "fca3943173f6026347f9ffc68baab39454446c3b" },
   "nightfox.nvim": { "branch": "main", "commit": "4dacd3f0185a2227bdf3b6c0975a8f0bf87cac9a" },
