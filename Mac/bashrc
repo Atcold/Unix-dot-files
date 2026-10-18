@@ -222,6 +222,20 @@ if [[ ${BLE_VERSION-} ]]; then
         ble-bind -m vi_imap --cursor 5
     }
     blehook/eval-after-load keymap_vi blerc/vi-cursors
+    # Multi-line commands: Enter indents line 2 by 2 spaces, under the `$ ` prompt;
+    # later lines inherit it through vi_imap auto-indent
+    function ble/widget/blerc/newline-ps2-indent {
+        ble/widget/vi_imap/newline
+        local before=${_ble_edit_str::_ble_edit_ind}
+        local breaks=${before//[!$'\n']}
+        ((${#breaks} == 1)) && ble/widget/.insert-string '  '
+        return 0
+    }
+    function blerc/vi-newline {
+        ble-bind -m vi_imap -f 'C-m' 'accept-single-line-or blerc/newline-ps2-indent'
+        ble-bind -m vi_imap -f 'RET' 'accept-single-line-or blerc/newline-ps2-indent'
+    }
+    blehook/eval-after-load keymap_vi blerc/vi-newline
     # No Homebrew formula for ble.sh: update it whenever brew upgrades
     function brew {
         command brew "$@" || return
