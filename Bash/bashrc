@@ -96,8 +96,11 @@ bind -m vi-insert '"\C-w": backward-kill-word'
 if [[ ${BLE_VERSION-} ]]; then           # under ble.sh, its own fzf integration
     ble-import -d integration/fzf-completion
     ble-import -d integration/fzf-key-bindings
-else
-    command -v fzf >/dev/null && eval "$(fzf --bash)"
+elif fzf --bash >/dev/null 2>&1; then    # fzf 0.48+ prints its own setup
+    eval "$(fzf --bash)"
+elif [ -r /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+    # Older Debian/Ubuntu fzf: key bindings ship as a file, completion via bash-completion
+    source /usr/share/doc/fzf/examples/key-bindings.bash
 fi
 
 # Git settings #################################################################
