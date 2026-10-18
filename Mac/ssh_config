@@ -23,9 +23,3 @@ Host mybox
 Host localhost
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
-
-Host alfspark
-    HostName alfspark.local
-    User atcold
-    IdentityFile ~/.ssh/id_ed25519
-    ServerAliveInterval 60
