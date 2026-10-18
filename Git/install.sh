@@ -1,6 +1,6 @@
 echo 'Installing Nbdime'
 
-pip3 install nbdime
+pipx install nbdime  # pipx comes from Mac/ or Linux/install.sh
 
 echo 'Done.'
 
