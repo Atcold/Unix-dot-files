@@ -14,9 +14,18 @@ if [[ $(uname) == 'Darwin' ]]; then
     done
 else
     sudo apt-get update
-    sudo apt-get install -y neovim fzf ripgrep
-    # tree-sitter-cli is not in apt; install via cargo if Rust is present.
-    command -v tree-sitter >/dev/null 2>&1 || cargo install tree-sitter-cli
+    sudo apt-get install -y fzf ripgrep
+    # apt's neovim is too old (Ubuntu 24.04 ships 0.9; the config needs 0.11+),
+    # so take the latest release from GitHub into ~/.local
+    ARCH=$(uname -m | sed 's/aarch64/arm64/')
+    mkdir -p ~/.local/bin
+    curl -L "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-$ARCH.tar.gz" | tar xzf - -C ~/.local
+    ln -sf ~/.local/nvim-linux-$ARCH/bin/nvim ~/.local/bin/nvim
+    # tree-sitter-cli is not in apt either; its release ships a prebuilt binary
+    TS_ARCH=$(uname -m | sed 's/aarch64/arm64/; s/x86_64/x64/')
+    curl -L "https://github.com/tree-sitter/tree-sitter/releases/latest/download/tree-sitter-linux-$TS_ARCH.gz" \
+        | gunzip > ~/.local/bin/tree-sitter
+    chmod +x ~/.local/bin/tree-sitter
 fi
 
 mkdir -p ~/.config
