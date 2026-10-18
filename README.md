@@ -54,10 +54,13 @@ git checkout master      # back to the bleeding edge
 Let's give to our *Unix* some pretty colours!
 
 
-## Ubuntu
+## Linux
 
-`cd` into `Ubuntu` and run `install.sh`. It will take care of everything.  
-If you'd like only to fix the colours, then run `Ubuntu/fix_colours.sh` only.
+`cd` into `Linux` and run `install.sh`. It will take care of everything.  
+If you'd like only to fix the colours, then run `Linux/fix_colours.sh` only.
+
+Bash is layered: `Bash/bashrc` holds the shared settings, and `Mac/bashrc` and `Linux/bashrc` add what is platform-specific before loading it.
+On the CIMS cluster, run `CIMS/install.sh` instead: it appends `CIMS/bashrc` (Linux plus the cluster settings) to the cluster's own `~/.bashrc`.
 
 
 ## MacOS
