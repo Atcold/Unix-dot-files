@@ -12,4 +12,10 @@ mkdir -p $HOME/.local/bin
 curl -L https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-musl.tar.gz \
     | tar xzf - -C $HOME/.local/bin
 
+# ble.sh: line editor that bashrc sources (colouring, menu completion, fuller vi mode)
+BLE_TMP="$(mktemp -d)"
+curl -L https://github.com/akinomyoga/ble.sh/releases/download/nightly/ble-nightly.tar.xz | tar xJf - -C "$BLE_TMP"
+bash "$BLE_TMP/ble-nightly/ble.sh" --install "$HOME/.local/share"
+rm -rf "$BLE_TMP"
+
 echo 'Done.'
