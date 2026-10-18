@@ -30,6 +30,10 @@ local specs = {
   -- Key hints: press <leader> (\) and a popup lists the available mappings
   { "folke/which-key.nvim", event = "VeryLazy", opts = { delay = 3000 } },  -- wait 3s before the help panel pops
 
+  -- Notebooks: open .ipynb as a py:percent script (as Vim's jupytext.vim); needs the
+  -- `jupytext` CLI (pipx install jupytext, in Vim/install.sh)
+  { "GCBallesteros/jupytext.nvim", opts = { style = "percent" } },
+
   -- Colour schemes (flip live with :colorscheme <name>)
   { "folke/tokyonight.nvim" },
   { "catppuccin/nvim", name = "catppuccin" },
