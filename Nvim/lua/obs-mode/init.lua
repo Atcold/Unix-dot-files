@@ -9,7 +9,8 @@ local M = {}
 
 -- The one personal value in the bundle: your vault's path. (Future: surface this through a
 -- setup(opts) field so others can point it at their own vault.)
-local vault_path = "/Users/atcold/Library/Mobile Documents/iCloud~md~obsidian/Documents/md-Wiki"
+-- ~/md-Wiki links to the iCloud vault on the Macs; machines without it skip obsidian.nvim.
+local vault_path = vim.fn.expand("~/md-Wiki")
 
 M.specs = {
   {
@@ -56,6 +57,7 @@ M.specs = {
   {
     "obsidian-nvim/obsidian.nvim",
     version = "*",
+    cond = vim.fn.isdirectory(vault_path) == 1,  -- no vault here (e.g. Linux): skip, don't error
     ft = "markdown",
     cmd = "Obsidian",  -- also load on :Obsidian, so it works with no .md buffer open
     keys = {
