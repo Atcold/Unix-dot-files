@@ -222,5 +222,10 @@ if [[ ${BLE_VERSION-} ]]; then
         ble-bind -m vi_imap --cursor 5
     }
     blehook/eval-after-load keymap_vi blerc/vi-cursors
+    # No Homebrew formula for ble.sh: update it whenever brew upgrades
+    function brew {
+        command brew "$@" || return
+        [[ $1 == upgrade ]] && ble-update
+    }
     ble-attach
 fi
