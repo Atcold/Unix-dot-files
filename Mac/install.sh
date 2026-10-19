@@ -5,6 +5,7 @@ brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avid
 brew install font-caskaydia-cove-nerd-font  # terminal Nerd Font (icon glyphs + ligatures)
 brew tap hamed-elfayome/claude-usage
 brew install claude-usage-tracker mac-mouse-fix
+pipx install python-kasa  # kasa: Kasa smart plugs over the LAN
 
 echo 'Done.'
 
