@@ -64,9 +64,17 @@ def keychain_login(service):
         err(f"No Keychain item {bold(service)}: run `spark setup` first.")
     # The item's attributes include a line like:  "acct"<blob>="me@example.com"
     email = next(l.split('"')[3] for l in item.stdout.splitlines() if '"acct"' in l)
-    password = subprocess.run(["security", "find-generic-password", "-s", service, "-w"],
-                              capture_output=True, text=True, check=True).stdout.strip()
-    return email, password
+    read = ["security", "find-generic-password", "-s", service, "-w"]
+    secret = subprocess.run(read, capture_output=True, text=True)
+    # 36 = errSecInteractionNotAllowed: the Keychain is locked, as it is in a fresh ssh session
+    if secret.returncode == 36 and sys.stdin.isatty():
+        print(dim("Keychain locked in this session: unlocking (the Mac's login password)"))
+        subprocess.run(["security", "unlock-keychain"])
+        secret = subprocess.run(read, capture_output=True, text=True)
+    if secret.returncode != 0:
+        err(f"Can't read the TP-Link password from the Keychain (security exit {secret.returncode}); "
+            f"over ssh, run {cyan('security unlock-keychain')} first.")
+    return email, secret.stdout.strip()
 
 
 async def find_plug(cfg):
