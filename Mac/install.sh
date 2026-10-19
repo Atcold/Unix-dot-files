@@ -6,6 +6,8 @@ brew install font-caskaydia-cove-nerd-font  # terminal Nerd Font (icon glyphs + 
 brew tap hamed-elfayome/claude-usage
 brew install claude-usage-tracker mac-mouse-fix
 pipx install python-kasa  # kasa: Kasa smart plugs over the LAN
+mkdir -p $HOME/.local/bin  # spark: AlfSPARK on/off from anywhere (Scripts/README.md)
+ln -sf "$(cd "$(dirname "$0")/.." && pwd)/Scripts/spark.py" $HOME/.local/bin/spark
 
 echo 'Done.'
 
