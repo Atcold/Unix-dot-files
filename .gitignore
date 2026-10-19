@@ -1,6 +1,9 @@
 # Ignoring Vim's Vundle
 /Vim/vim/bundle/
 Vim/vim/.netrwhist
+
+# lazy.nvim's plugin versions: each machine updates on its own
+Nvim/lazy-lock.json
 .DS_Store
 
 # Python bytecode (ranger compiles its colorscheme/plugin into the repo dir)
