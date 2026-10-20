@@ -1,12 +1,13 @@
 # CIMS-only settings, on top of Linux/bashrc (which loads the shared Bash/bashrc)
 source "$HOME/.settings/Linux/bashrc"
 
+# Editor #######################################################################
 export EDITOR="vim"
+alias vim='TERM=xterm-256color /usr/bin/vim'
 
-# Some more useful ALIAs
+# Aliases and shortcuts ########################################################
 alias l1='l -1'
 # alias tmux="TERM=xterm-256color $HOME/local/bin/tmux"
-alias vim='TERM=xterm-256color /usr/bin/vim'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 alias tree='tree -C'
@@ -24,13 +25,13 @@ function cv {
     column -ts, $1 | lv
 }
 
-# Fix CIMS shit
+# Fix CIMS defaults ############################################################
 unalias mv
 unalias rm
 export PROMPT_COMMAND=""
 
-# Shortcuts and aliases for NYU and CIMS machines ##############################
-#Some useful EXPORTs
+# NYU and CIMS hosts ###########################################################
+# Some useful EXPORTs
 export L1='lion1.'$CS
 export L2='lion2.'$CS
 export L3='lion3.'$CS
@@ -38,7 +39,7 @@ export L4='lion4.'$CS
 export L5='lion5.'$CS
 export L6='lion6.'$CS
 
-# and corresponding ALIAs
+# and corresponding ALIASes
 alias L1="ssh $L1"
 alias L2="ssh $L2"
 alias L3="ssh $L3"
@@ -54,29 +55,31 @@ alias L4X="ssh $L4 -Y"
 alias L5X="ssh $L5 -Y"
 alias L6X="ssh $L6 -Y"
 
+# Slurm and Jupyter ############################################################
 # alias Gpu="srun --qos=interactive --gres=gpu:1 --exclude=rose[1-4,7-9] --pty bash"
 alias Gpu="srun --qos=interactive --gres=gpu:1 --pty bash"
 
 # Run once: $ jupyter notebook password
 function nb {
-    echo "Exporting XDG vairable, starting up Jupyter Notebook"
+    echo "Exporting XDG variable, starting up Jupyter Notebook"
     echo -ne '  > on your local machine run: \033[1;32m$\033[0m '
     echo "nb $(hostname --short)"
     export XDG_RUNTIME_DIR=""
     jupyter notebook --no-browser --ip 0.0.0.0
 }
 function lab {
-    echo "Exporting XDG vairable, starting up Jupyter Notebook"
+    echo "Exporting XDG variable, starting up Jupyter Lab"
     echo -ne '  > on your local machine run: \033[1;32m$\033[0m '
     echo "nb $(hostname --short)"
     export XDG_RUNTIME_DIR=""
     jupyter lab --no-browser --ip 0.0.0.0
 }
 
+# Environment ##################################################################
 # Set correct permissions
 umask 007
 
-# Setup the singularity
+# Set up Singularity
 export SINGULARITY_BIND="/misc"
 
 # Setting up Python env

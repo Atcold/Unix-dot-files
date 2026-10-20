@@ -1,38 +1,37 @@
+# Linux-only settings; the shared ones are in Bash/bashrc, loaded at the end
+
 # Non-interactive shells (scp, `ssh host command`) stop here
 case $- in
     *i*) ;;
       *) return;;
 esac
 
-# ble.sh: syntax colouring and history suggestions while typing. Loaded first,
-# attached at the very end of Bash/bashrc (after vi mode, binds and prompt). Install:
-#   curl -L https://github.com/akinomyoga/ble.sh/releases/download/nightly/ble-nightly.tar.xz | tar xJf -
-#   bash ble-nightly/ble.sh --install ~/.local/share
-[[ -f ~/.local/share/blesh/ble.sh ]] && source ~/.local/share/blesh/ble.sh --attach=none
-
-# Linux-only settings; the shared ones are in Bash/bashrc, loaded at the end
-
-# Improvind Bash ###############################################################
+# Aliases and shortcuts ########################################################
 alias lsv='ls -vX --color=auto'  # GNU ls with natural version sort
 # Ubuntu ships bat as batcat
 command -v batcat >/dev/null && alias bat='batcat --paging=always'
 
+# Colours ######################################################################
 # Better ls colouring
 if [[ -f $HOME/.dir_colors ]]; then
     eval $(dircolors -b $HOME/.dir_colors)
 fi
 
+# Pager ########################################################################
 # Make less more friendly for non-text input files (from Ubuntu's own .bashrc)
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
+# Completion ###################################################################
 # Essential bash completion
 if [ -r /usr/share/bash-completion/bash_completion ]; then
     source /usr/share/bash-completion/bash_completion
 fi
 
+# Prompt #######################################################################
 # Pretty hostname (AlfSPARK) for the prompt in Bash/bashrc, if one is set
 name=$(sed -n 's/^PRETTY_HOSTNAME=//p' /etc/machine-info 2>/dev/null | tr -d '"')
 
+# PATH #########################################################################
 # CUDA, where installed
 if [ -d /usr/local/cuda/bin ]; then
     export PATH="$PATH:/usr/local/cuda/bin"

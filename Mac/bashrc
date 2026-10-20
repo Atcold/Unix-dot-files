@@ -1,12 +1,7 @@
-# ble.sh: syntax colouring and history suggestions while typing. Loaded first,
-# attached at the very end of Bash/bashrc (after vi mode, binds and prompt). Install:
-#   curl -L https://github.com/akinomyoga/ble.sh/releases/download/nightly/ble-nightly.tar.xz | tar xJf -
-#   bash ble-nightly/ble.sh --install ~/.local/share
-[[ $- == *i* && -f ~/.local/share/blesh/ble.sh ]] && source ~/.local/share/blesh/ble.sh --attach=none
-
 # Mac-only settings; the shared ones are in Bash/bashrc, loaded at the end
 
-# Load homebrew
+# System #######################################################################
+# Load Homebrew first: the lines below call `brew --prefix`
 if [ -f /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
 elif [ -f /usr/local/Homebrew/bin/brew ]; then
@@ -15,7 +10,10 @@ else
     echo "brew not found :/"
 fi
 
-# Improvind Bash ###############################################################
+# Fix Catalina zsh shit warning
+export BASH_SILENCE_DEPRECATION_WARNING=1
+
+# Aliases and shortcuts ########################################################
 alias lsv='gls -vX --color=auto'  # GNU ls with natural version sort
 alias eject='diskutil eject'
 alias skim='open -a /Applications/Skim.app'
@@ -23,18 +21,22 @@ alias preview='open -a /Applications/Preview.app'
 alias screen-off='pmset displaysleepnow'
 alias ql='qlmanage -p &>/dev/null'  # brew install syntax-highlight
 alias bat='bat --paging=always'
-# Claude Code from an SSH shell: its token lives in the login keychain, which
-# SSH sessions don't unlock — so unlock it (asks the Mac password), then run
-claude-ssh() { security unlock-keychain ~/Library/Keychains/login.keychain-db && claude "$@"; }
 
-# Mount my box drive on my Mac
-function MountMyBox {
-    # ssh -L 2222:box795:22 $ACCESS -Nf
-    # sshfs -p 2222 localhost:/ /Volumes/MyBox/
-    sshfs mybox:/ /Volumes/MyBox
+# Claude Code from an SSH shell with token in the keychain
+claude-ssh() {
+    security unlock-keychain ~/Library/Keychains/login.keychain-db &&
+    claude "$@"
 }
 
-#Screen colours
+# Mount CIMS on my Mac
+function MountCims {
+    # ssh -L 2222:box795:22 $ACCESS -Nf
+    # sshfs -p 2222 localhost:/ /Volumes/MyBox/
+    sshfs cims:/ /Volumes/Cims
+}
+
+# Colours ######################################################################
+# Screen colours
 export CLICOLOR=1
 export LSCOLORS=gxfxbEaEBxxEhEhBaDaCaD
 
@@ -43,15 +45,14 @@ if [[ -f $(brew --prefix)/bin/gdircolors && -f $HOME/.dir_colors ]]; then
     eval $(gdircolors -b $HOME/.dir_colors)
 fi
 
+# Completion ###################################################################
 # Essential bash completion (bash-completion@2 — needs bash 4.2+)
 if [ -r $(brew --prefix)/etc/profile.d/bash_completion.sh ]
 then
     source $(brew --prefix)/etc/profile.d/bash_completion.sh
 fi
 
-# Fix Catalina zsh shit warning
-export BASH_SILENCE_DEPRECATION_WARNING=1
-
+# Prompt #######################################################################
 # Computer name for the prompt in Bash/bashrc
 name=$(networksetup -getcomputername)
 
@@ -76,15 +77,17 @@ function openpaper {
     open "$(findpaper $1 | sed -n "${FILEID}")"
 }
 
+# PATH #########################################################################
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/atcold/.lmstudio/bin"
 
-# No Homebrew formula for ble.sh: update it whenever brew upgrades
-if [[ ${BLE_VERSION-} ]]; then
-    function brew {
-        command brew "$@" || return
-        [[ $1 == upgrade ]] && ble-update
-    }
-fi
+# Updates ######################################################################
+# Update everything: Homebrew, TeX Live, ble.sh, and Claude Code
+function update-all {
+    brew update && brew upgrade
+    sudo tlmgr update --self --all --reinstall-forcibly-removed
+    [[ ${BLE_VERSION-} ]] && ble-update
+    claude update
+}
 
 source "$HOME/.settings/Bash/bashrc"

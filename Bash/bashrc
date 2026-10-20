@@ -1,7 +1,10 @@
-# Shared Bash settings, loaded at the end of Mac/bashrc and Linux/bashrc. Those
-# load ble.sh first and set what differs per platform; this file attaches ble.sh last.
+# Shared Bash settings, loaded at the end of Mac/bashrc and Linux/bashrc
 
-# Improvind Bash ###############################################################
+# Line editor: ble.sh loads here, attaches at the end ##########################
+[[ $- == *i* && -f ~/.local/share/blesh/ble.sh ]] &&
+    source ~/.local/share/blesh/ble.sh --attach=none
+
+# Aliases and shortcuts ########################################################
 alias grep='grep --colour=auto'
 if command -v eza >/dev/null; then
     alias ls='eza --icons=auto --group-directories-first --sort=extension'
@@ -23,14 +26,17 @@ alias   .3='cd ../../../'
 alias   .4='cd ../../../../'
 alias   .5='cd ../../../../../'
 alias cca='claude --permission-mode auto'  # Claude Code, auto mode
+
 # t1–t5: show tree of current dir up to depth N (e.g. t2 shows 2 levels)
-_t() { local dir="$(basename "$PWD")"; (cd .. && tree -L "$1" "$dir"); }
+_t() {
+    local dir="$(basename "$PWD")"
+    (cd .. && tree -L "$1" "$dir")
+}
 for i in 1 2 3 4 5; do
   alias "t$i"="_t $i"
 done
 
-# Bare `tmux` attaches to (or creates) a session named "Tmux", not "0"
-# `command` skips this function, so we call the real binary and not ourselves
+# Bare `tmux` attaches to (or creates) a session named "Tmux"
 function tmux {
     if [ $# -eq 0 ]; then
         command tmux new-session -A -s Tmux
@@ -39,6 +45,7 @@ function tmux {
     fi
 }
 
+# SSH tunnels ##################################################################
 # Create ssh tunnel via cims for Jupyter Notebook
 # Run as: nb server_name
 function nb {
@@ -52,7 +59,7 @@ function nb {
 }
 
 # Connect remote server port 22 to localhost port 6000 for PyCharm
-# Run as: pycharm server_name
+# Run as: PyCharm server_name
 function PyCharm {
     if [ -z "$1" ]; then
         echo -e '  > run as: \033[1;32m$\033[0m PyCharm <my_server>'
@@ -63,6 +70,9 @@ function PyCharm {
     echo "Done. PID = $REPLY"
 }
 
+# Pager and man pages ##########################################################
+export PAGER="less -R"
+
 # Coloured LESS (MAN) pages
 export LESS_TERMCAP_mb=$(printf '\e[01;31m') # enter blinking mode – red
 export LESS_TERMCAP_md=$(printf '\e[01;35m') # enter double-bright mode – bold, magenta
@@ -72,6 +82,7 @@ export LESS_TERMCAP_so=$(printf '\e[01;33m') # enter standout mode – yellow
 export LESS_TERMCAP_ue=$(printf '\e[0m') # leave underline mode
 export LESS_TERMCAP_us=$(printf '\e[04;36m') # enter underline mode – cyan
 
+# Vi mode and completion #######################################################
 # Use Vim key binding in Bash and editor
 set -o vi
 export EDITOR="nvim"
@@ -102,50 +113,47 @@ elif [ -r /usr/share/doc/fzf/examples/key-bindings.bash ]; then
     source /usr/share/doc/fzf/examples/key-bindings.bash
 fi
 
-# Git settings #################################################################
-# The platform file may set $name (e.g. the Mac's computer name)
-name=${name:-$(hostname -s)}
-
+# Git ##########################################################################
 function parse_git_dirty {
   [[ $(git status 2> /dev/null | tail -n1) != "nothing to commit, working tree clean" ]] && echo "*"
 }
 function parse_git_branch {
     git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/⎇ \1$(parse_git_dirty)/"
 }
+
+# Prompt (before the ble.sh attach, which takes its copy of PS1) ###############
+# The platform file may set $name (e.g. the Mac's computer name)
+name=${name:-$(hostname -s)}
+
 # After `clear` in tmux, ble.sh can redraw the first line one column over. The leading
 # `\r` returns to column 1; `\[` and `\]` mark it as zero-width for prompt layout.
 export PS1="\[\r\]\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \
 \[\e[1;33m\]\w\[\e[0m\] \[\e[2m\]\$(parse_git_branch)\[\e[0m\]\n\[\e[1;32m\]$\[\e[0m\] "
 export PS2="\[\e[1;31m\]>\[\e[0m\] "
-export PAGER="less -R"
 
-# Shortcuts for CIMS machines ##################################################
-#Some useful EXPORTs
+# NYU and CIMS hosts ###########################################################
+# Some useful EXPORTs
 export NYU="nyu.edu"
 export CIMS="cims.$NYU"
 export CS="cs.$NYU"
 export ACCESS="access.$CIMS"
 export CASSIO="cassio"
-export MYBOX="mybox"
 
 # and corresponding ALIASes
 alias Access="ssh $ACCESS"
 alias Cassio="ssh $CASSIO"
-alias MyBox="ssh $MYBOX"
 
 # with X forwarding
 alias AccessX="ssh -Y $ACCESS"
-alias MyBoxX="ssh -Y $MYBOX"
 
-# Created by `pipx` on 2024-08-28 22:28:30
+# PATH #########################################################################
 export PATH="$PATH:$HOME/.local/bin"
 
 # Add Gollama to PATH
 export PATH="$PATH:$HOME/go/bin"
 
-#eval "$(gh copilot alias -- bash)"
-
-# ble.sh: attach last (the platform file loads it first); no "-- INSERT --" line
+# ble.sh: attach last ##########################################################
+# No "-- INSERT --" line
 if [[ ${BLE_VERSION-} ]]; then
     bleopt keymap_vi_mode_show:=   # ':=' because the vi keymap loads later
     bleopt complete_auto_complete:=   # no grey suggestions while typing; Tab still completes
