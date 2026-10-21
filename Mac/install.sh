@@ -63,6 +63,23 @@ rm -rf "$BLE_TMP"
 echo 'Done.'
 
 
+echo 'Keeping the computer name'
+
+# Only AlfMAC5 gets renamed by NYU's BigFix. The script is copied, root-owned, out of
+# the repo: a root daemon must not run a file the user can edit.
+if [ "$(scutil --get LocalHostName)" = AlfMAC5 ]; then
+    sudo install -d /usr/local/sbin
+    sudo install -o root -g wheel -m 755 keepname.sh /usr/local/sbin/keepname
+    sudo install -o root -g wheel -m 644 com.atcold.keepname.plist /Library/LaunchDaemons/
+    sudo launchctl bootout system/com.atcold.keepname 2>/dev/null
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.atcold.keepname.plist
+else
+    echo 'Skipping: this is not AlfMAC5.'
+fi
+
+echo 'Done.'
+
+
 echo 'Installing SSH configurations'
 
 rm -rf $HOME/.ssh/config
