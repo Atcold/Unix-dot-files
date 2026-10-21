@@ -53,8 +53,8 @@ then
 fi
 
 # Prompt #######################################################################
-# Computer name for the prompt in Bash/bashrc
-name=$(networksetup -getcomputername)
+# Local hostname for the prompt in Bash/bashrc (NYU keeps resetting the Computer Name)
+name=$(scutil --get LocalHostName)
 
 # Find and open papers #########################################################
 # Adapted from https://superuser.com/a/1293358/224792
