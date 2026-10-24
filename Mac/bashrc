@@ -66,8 +66,8 @@ function spot {
 # Restrict to files under (recursive) a specific path
 function findpaper {
     mdfind \
-        -onlyin "$HOME/NYU/Articles" \
-        -onlyin "$HOME/NYU/Old articles" \
+        -onlyin "$HOME/NYU/Library/Articles" \
+        -onlyin "$HOME/NYU/Archive/Articles" \
         "kMDItemDisplayName=='*$1*'cd";
 }
 
