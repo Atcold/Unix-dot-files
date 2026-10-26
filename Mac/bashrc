@@ -80,6 +80,8 @@ function openpaper {
 # PATH #########################################################################
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/atcold/.lmstudio/bin"
+# OSS CAD Suite: Yosys, nextpnr, Apicula, openFPGALoader. Last, so Homebrew's dot and the like win.
+[[ -d ~/Applications/oss-cad-suite/bin ]] && export PATH="$PATH:$HOME/Applications/oss-cad-suite/bin"
 
 # Updates ######################################################################
 # Update everything: Homebrew, TeX Live, ble.sh, and Claude Code
