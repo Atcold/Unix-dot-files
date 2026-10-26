@@ -27,6 +27,21 @@ the offsets in the font vary per letter (a@-20, c@+50, n@-10). For the ü set th
 mark is raised clear of the diaeresis, because no existing glyph stacks two
 marks and there is nothing to copy.
 
+It also turns off the ligatures for `<=` and `<<=`. In Verilog `<=` is an
+assignment, and in C `<<=` is one too, but the font draws them as ≤ and ≪=. The
+ligatures live in the GSUB table's chaining rules (`calt`): each rule, on
+seeing its glyphs in context, calls a substitution that swaps in a ligature
+glyph such as `less_equal.liga`. Removing `less` from the input of the rules
+whose substitution would turn it into one of those glyphs leaves `<` and `=` as
+they are, and every other ligature untouched.
+
+Runs of hyphens are drawn as one line, so git's `-----` (lines removed) reads as
+a rule. The `--` and `---` ligatures go the same way as `<=`. Longer runs are a
+sequence: the first hyphen turns into `hyphen_start.seq` if the next glyph is a
+hyphen, `<`, `>` or `|`, and the rest follow. Taking the hyphen out of that
+look-ahead leaves plain runs alone, while `->`, `<--` and `|--` still join; the
+cost is that `-->` shows as a dash and then a joined `->`.
+
 The patched font is written beside the original with a new family name, so it
 installs alongside rather than fighting the original in the font cache.
 """
@@ -36,6 +51,7 @@ import sys
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables import otTables
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphComponent
 
 ARGS_ARE_XY_VALUES = 0x0002
@@ -66,6 +82,15 @@ PLAN = [
     (0x01DC, "uni01DC", "udieresis", "grave", True),
 ]
 
+# Ligature glyphs the terminal should never show: `<=` alone, and as the start
+# of a longer run (`<==`, `<=>`), and `<<=`.
+NO_LIGATURE = {
+    "less_equal.liga", "less_equal_start.seq", "less_equal_middle.seq",
+    "less_equal_end.seq", "less_less_equal.liga", "less_less_equal_start.seq",
+    "less_less_equal_middle.seq", "less_less_equal_end.seq",
+    "hyphen_hyphen.liga", "hyphen_hyphen_hyphen.liga",
+}
+
 
 def ink_bounds(glyf, name):
     """(xMin, xMax, yMin, yMax) of a glyph's ink, resolving composites."""
@@ -87,6 +112,80 @@ def ink_bounds(glyf, name):
     xs = [p[0] for p in coords]
     ys = [p[1] for p in coords]
     return (min(xs), max(xs), min(ys), max(ys))
+
+
+def drop_ligatures(font, glyphs):
+    """Stop the chaining rules from producing `glyphs`; return how many changed."""
+    lookups = font["GSUB"].table.LookupList.Lookup
+
+    def real(lookup, sub):  # type 7 is an extension wrapper around the real subtable
+        return sub.ExtSubTable if lookup.LookupType == 7 else sub
+
+    def produces(index, glyph):
+        lookup = lookups[index]
+        for sub in lookup.SubTable:
+            out = getattr(real(lookup, sub), "mapping", {}).get(glyph)
+            if out is not None and set(out if isinstance(out, list) else [out]) & glyphs:
+                return True
+        return False
+
+    changed = 0
+    for lookup in lookups:
+        keep = []
+        for sub in lookup.SubTable:
+            rule = real(lookup, sub)
+            # Coverage-based chaining rules (format 3): one coverage per input position.
+            if getattr(rule, "Format", None) == 3 and hasattr(rule, "InputCoverage"):
+                for rec in rule.SubstLookupRecord:
+                    cov = rule.InputCoverage[rec.SequenceIndex]
+                    hit = [g for g in cov.glyphs if produces(rec.LookupListIndex, g)]
+                    if hit:
+                        # A new Coverage, since one may be shared between rules.
+                        new = otTables.Coverage()
+                        new.glyphs = [g for g in cov.glyphs if g not in hit]
+                        rule.InputCoverage[rec.SequenceIndex] = new
+                        changed += 1
+                if not all(c.glyphs for c in rule.InputCoverage):
+                    continue  # nothing left to match: drop the rule
+            # Glyph-based chaining rules (format 1): one rule set per first glyph.
+            elif getattr(rule, "Format", None) == 1 and hasattr(rule, "ChainSubRuleSet"):
+                for first, rules in zip(rule.Coverage.glyphs, rule.ChainSubRuleSet):
+                    def hits(r):
+                        seq = [first] + list(r.Input)
+                        return any(produces(rec.LookupListIndex, seq[rec.SequenceIndex])
+                                   for rec in r.SubstLookupRecord)
+                    kept = [r for r in rules.ChainSubRule if not hits(r)]
+                    changed += len(rules.ChainSubRule) - len(kept)
+                    rules.ChainSubRule, rules.ChainSubRuleCount = kept, len(kept)
+            keep.append(sub)
+        lookup.SubTable, lookup.SubTableCount = keep, len(keep)
+    return changed
+
+
+def no_plain_hyphen_runs(font):
+    """A hyphen starts a joined run only before <, > or |; return rules changed."""
+    lookups = font["GSUB"].table.LookupList.Lookup
+
+    def real(lookup, sub):
+        return sub.ExtSubTable if lookup.LookupType == 7 else sub
+
+    starts = {i for i, lookup in enumerate(lookups) for sub in lookup.SubTable
+              if getattr(real(lookup, sub), "mapping", {}).get("hyphen") == "hyphen_start.seq"}
+    changed = 0
+    for lookup in lookups:
+        for sub in lookup.SubTable:
+            rule = real(lookup, sub)
+            # The rule that starts a run: hyphen, nothing before it, a look-ahead after.
+            if (getattr(rule, "Format", None) == 3 and hasattr(rule, "InputCoverage")
+                    and not rule.BacktrackCoverage and rule.LookAheadCoverage
+                    and "hyphen" in rule.InputCoverage[0].glyphs
+                    and "hyphen" in rule.LookAheadCoverage[0].glyphs
+                    and any(rec.LookupListIndex in starts for rec in rule.SubstLookupRecord)):
+                new = otTables.Coverage()
+                new.glyphs = [g for g in rule.LookAheadCoverage[0].glyphs if g != "hyphen"]
+                rule.LookAheadCoverage[0] = new
+                changed += 1
+    return changed
 
 
 def build(font, out_path, family_suffix):
@@ -145,6 +244,8 @@ def build(font, out_path, family_suffix):
                 table.cmap[cp] = name
         added.append((name, chr(cp), base, mark, dx, dy))
 
+    unligated = drop_ligatures(font, NO_LIGATURE) + no_plain_hyphen_runs(font)
+
     # A distinct family name so it installs alongside the original instead of
     # colliding with it in the font cache.
     name_tbl = font["name"]
@@ -157,7 +258,7 @@ def build(font, out_path, family_suffix):
             rec.string = rec.toUnicode() + family_suffix.replace(" ", "")
 
     font.save(out_path)
-    return added, skipped
+    return added, skipped, unligated
 
 
 def main():
@@ -173,12 +274,13 @@ def main():
         f"{args.font.stem}-{args.suffix.lower()}{args.font.suffix}")
 
     font = TTFont(args.font, fontNumber=0)
-    added, skipped = build(font, out, args.suffix)
+    added, skipped, unligated = build(font, out, args.suffix)
 
     for name, ch, base, mark, dx, dy in added:
         print(f"  + {ch}  {name:10s} = {base} + {mark}  @({dx},{dy})")
     for name, why in skipped:
         print(f"  - {name:10s} skipped: {why}")
+    print(f"  {unligated} ligature rule(s) for <=, <<= and runs of hyphens turned off")
     print(f"\n{len(added)} glyph(s) added -> {out}")
 
 

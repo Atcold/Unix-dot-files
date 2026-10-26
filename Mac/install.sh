@@ -18,14 +18,19 @@ echo 'Adding the pinyin letters to the terminal font'
 # all four tones of ü have no glyph -- the terminal substitutes a proportional face
 # mid-word and the column drifts. The patch assembles them from pieces the font already
 # has and writes a "... Pinyin" family beside the original, which is the family
-# Monokai.terminal asks for. uv supplies fonttools without installing it system-wide.
-FONT="$HOME/Library/Fonts/CaskaydiaCoveNerdFont-ExtraLight.ttf"
-if [ -f "$FONT" ]; then
-    uv run --with fonttools --quiet python \
-        "$(dirname "$0")/../Scripts/patch_pinyin_font.py" "$FONT"
-else
-    echo "Skipping the pinyin patch: $FONT is not installed."
-fi
+# Monokai.terminal asks for. It also turns off the <= and <<= ligatures, drawn as
+# less-or-equal where Verilog means assignment. uv supplies fonttools without installing
+# it system-wide. Every face Terminal draws with is patched, the italic and bold ones
+# too, or the Pinyin family has none and Terminal loses italics.
+for FACE in ExtraLight ExtraLightItalic Bold BoldItalic; do
+    FONT="$HOME/Library/Fonts/CaskaydiaCoveNerdFont-$FACE.ttf"
+    if [ -f "$FONT" ]; then
+        uv run --with fonttools --quiet python \
+            "$(dirname "$0")/../Scripts/patch_pinyin_font.py" "$FONT"
+    else
+        echo "Skipping the pinyin patch: $FONT is not installed."
+    fi
+done
 
 echo 'Done.'
 
