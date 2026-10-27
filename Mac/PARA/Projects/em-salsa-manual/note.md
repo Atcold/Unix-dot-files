@@ -1,1 +1,0 @@
-/Users/atcold/md-Wiki/Projects/em-salsa-manual.md

@@ -1,1 +1,0 @@
-/Users/atcold/md-Wiki/Projects/history-of-computation.md

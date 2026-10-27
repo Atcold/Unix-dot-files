@@ -1,1 +1,0 @@
-/Users/atcold/md-Wiki/Projects/truck-backer-upper.md

@@ -1,1 +1,0 @@
-/Users/atcold/md-Wiki/Projects/hp-cp1215.md

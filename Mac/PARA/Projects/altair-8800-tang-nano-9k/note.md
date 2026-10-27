@@ -1,1 +1,0 @@
-/Users/atcold/md-Wiki/Projects/altair-8800-tang-nano-9k.md
