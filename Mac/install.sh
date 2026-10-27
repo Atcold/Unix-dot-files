@@ -91,3 +91,14 @@ rm -rf $HOME/.ssh/config
 ln -s $(pwd)/ssh_config $HOME/.ssh/config
 
 echo 'Done.'
+
+
+echo 'Installing Karabiner configurations'
+
+# Karabiner may miss edits made through the link; restart its user server to reload:
+# launchctl kickstart -k gui/$(id -u)/org.pqrs.service.agent.Karabiner-Console-User-Server
+mkdir -p $HOME/.config/karabiner
+rm -rf $HOME/.config/karabiner/karabiner.json
+ln -s $(pwd)/karabiner.json $HOME/.config/karabiner/karabiner.json
+
+echo 'Done.'
