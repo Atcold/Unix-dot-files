@@ -28,7 +28,10 @@ fi
 COMPUTER=$(networksetup -getcomputername 2>/dev/null || hostname -s)
 
 # --- Usage (5-hour session) ---
-CACHE_FILE="$HOME/.claude/.statusline-usage-cache"
+# Per-Mac XDG cache, outside Dropbox: every session rewrites it, and in the synced ~/.claude
+# each overlapping write became a Dropbox conflicted copy
+CACHE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline/usage"
+mkdir -p "${CACHE_FILE%/*}"
 usage_result=""
 
 # Try cache first (valid for 5 minutes)
@@ -50,7 +53,8 @@ if [ -z "$usage_result" ]; then
         resets_at=$(echo "$swift_result" | cut -d'|' -f2)
         if [ -n "$utilization" ] && [[ "$utilization" != ERROR* ]]; then
             usage_result="${utilization}|${resets_at}"
-            { echo "TIMESTAMP=$(date +%s)"; echo "UTILIZATION=${utilization}"; echo "RESETS_AT=${resets_at}"; } > "$CACHE_FILE"
+            { echo "TIMESTAMP=$(date +%s)"; echo "UTILIZATION=${utilization}"; echo "RESETS_AT=${resets_at}"; } > "$CACHE_FILE.$$" &&
+                mv -f "$CACHE_FILE.$$" "$CACHE_FILE"   # whole file or nothing, for sessions reading it
         fi
     fi
 fi
