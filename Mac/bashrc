@@ -77,19 +77,6 @@ function openpaper {
     open "$(findpaper $1 | sed -n "${FILEID}")"
 }
 
-# PARA #########################################################################
-# Jump to a project (p), area (a) or resource (r) in ~/PARA; Tab completes names
-function p { cd "$HOME/PARA/Projects/${1-}"; }
-function a { cd "$HOME/PARA/Areas/${1-}"; }
-function r { cd "$HOME/PARA/Resources/${1-}"; }
-
-function _para_complete {
-    local dir
-    case $1 in p) dir=Projects ;; a) dir=Areas ;; r) dir=Resources ;; esac
-    COMPREPLY=($(compgen -W "$(command ls "$HOME/PARA/$dir")" -- "$2"))
-}
-complete -F _para_complete p a r
-
 # PATH #########################################################################
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/atcold/.lmstudio/bin"
@@ -106,3 +93,4 @@ function update-all {
 }
 
 source "$HOME/.settings/Bash/bashrc"
+source "$HOME/.settings/Mac/para.sh"   # p, a, r: jump into ~/PARA
