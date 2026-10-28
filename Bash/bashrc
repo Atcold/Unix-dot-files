@@ -178,5 +178,16 @@ if [[ ${BLE_VERSION-} ]]; then
         ble-bind -m vi_imap -f 'RET' 'accept-single-line-or blerc/newline-ps2-indent'
     }
     blehook/eval-after-load keymap_vi blerc/vi-newline
+    # PARA jumps (p, a, r in Mac/bashrc): a space right after them lists the names; Tab walks the list
+    function ble/widget/blerc/space-para-menu {
+        ble/widget/magic-space
+        [[ $_ble_edit_str == [par]' ' ]] && declare -F _para_complete >/dev/null &&
+            ble/widget/complete show_menu
+        return 0
+    }
+    function blerc/vi-space-para {
+        ble-bind -m vi_imap -f 'SP' 'blerc/space-para-menu'
+    }
+    blehook/eval-after-load keymap_vi blerc/vi-space-para
     ble-attach
 fi
