@@ -1,7 +1,8 @@
 # Shared Bash settings, loaded at the end of Mac/bashrc and Linux/bashrc
 
 # Line editor: ble.sh loads here, attaches at the end ##########################
-[[ $- == *i* && -f ~/.local/share/blesh/ble.sh ]] &&
+# Only once: re-sourcing it on `. ~/.bashrc` types the terminal's replies into the prompt
+[[ $- == *i* && ! ${BLE_VERSION-} && -f ~/.local/share/blesh/ble.sh ]] &&
     source ~/.local/share/blesh/ble.sh --attach=none
 
 # Aliases and shortcuts ########################################################
@@ -178,5 +179,5 @@ if [[ ${BLE_VERSION-} ]]; then
         ble-bind -m vi_imap -f 'RET' 'accept-single-line-or blerc/newline-ps2-indent'
     }
     blehook/eval-after-load keymap_vi blerc/vi-newline
-    ble-attach
+    [[ ${_ble_attached-} ]] || ble-attach
 fi
