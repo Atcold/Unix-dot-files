@@ -145,6 +145,19 @@ function _para_ble_setup {
         fi
         return "$ext"
     }
+    # Typing into an open menu narrows it. ble.sh matches only the name, then falls back to
+    # substrings ('ab' finds chinese-lab); a p menu keeps the items whose name or key starts with it.
+    eval "function _para_filter_candidates $(declare -f ble/complete/menu-filter/.filter-candidates | tail -n +2)"
+    function ble/complete/menu-filter/.filter-candidates {
+        [[ ${_ble_complete_menu0_pack[0]} == para:* ]] || { _para_filter_candidates; return; }
+        cand_pack=()
+        local pack key "${_ble_complete_cand_varnames[@]/%/=}"
+        for pack in "${_ble_complete_menu0_pack[@]}"; do
+            ble/complete/cand/unpack "$pack"; key=${DATA%%:*}
+            [[ $CAND == "$COMPV"* || ( $key && $key == "$COMPV"* ) ]] && ble/array#push cand_pack "$pack"
+        done
+        ((${#cand_pack[@]})) || _para_filter_candidates
+    }
 }
 function ble/cmdinfo/complete:p { _para_menu p; }
 function ble/cmdinfo/complete:a { _para_menu a; }
