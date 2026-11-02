@@ -94,3 +94,7 @@ function update-all {
 
 source "$HOME/.settings/Bash/bashrc"
 source "$HOME/.settings/Mac/para.sh"   # p, a, r: jump into ~/PARA
+
+# gog keeps its Google tokens in its own encrypted file; the password lives in the keychain, read by Apple's security tool
+export GOG_KEYRING_BACKEND=file
+export GOG_KEYRING_PASSWORD="$(security find-generic-password -s gog-keyring -w 2>/dev/null)"
