@@ -86,7 +86,7 @@ export PATH="$PATH:/Users/atcold/.lmstudio/bin"
 # Updates ######################################################################
 # Update everything: Homebrew, TeX Live, ble.sh, and Claude Code
 function update-all {
-    brew update && brew upgrade
+    brew update && brew upgrade --yes
     sudo tlmgr update --self --all --reinstall-forcibly-removed
     [[ ${BLE_VERSION-} ]] && ble-update
     claude update
