@@ -21,6 +21,7 @@ alias preview='open -a /Applications/Preview.app'
 alias screen-off='pmset displaysleepnow'
 alias ql='qlmanage -p &>/dev/null'  # brew install syntax-highlight
 alias bat='bat --paging=always'
+xxd() { if [[ -t 1 ]]; then command xxd -R always "$@"; else command xxd "$@"; fi; }  # colour on screen only
 
 # Claude Code from an SSH shell with token in the keychain
 claude-ssh() {
