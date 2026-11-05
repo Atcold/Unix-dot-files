@@ -1,0 +1,8 @@
+# Merge these preferences into the existing runtime configuration.
+project_doc_fallback_filenames = ["CLAUDE.md"]
+
+[desktop]
+external-agent-import-sync-enabled = false
+
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit"]

@@ -1,0 +1,24 @@
+{
+  "attribution": {
+    "commit": "",
+    "sessionUrl": false
+  },
+  "model": "opus",
+  "effortLevel": "high",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"This session runs on $(scutil --get LocalHostName 2>/dev/null || hostname -s).\""
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$HOME/.claude/statusline.sh\""
+  }
+}

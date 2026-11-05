@@ -1,16 +1,32 @@
-echo 'Installing Claude configurations'
+#!/usr/bin/env bash
+set -euo pipefail
 
-mkdir -p $HOME/.claude
+cd -- "$(dirname -- "$0")"
+source_dir=$PWD
+mkdir -p "$HOME/.claude" "$HOME/Work/Scratch/claude-setup"
+backup=$(mktemp -d "$HOME/Work/Scratch/claude-setup/install.XXXXXX")
+settings="$HOME/.claude/settings.json"
 
-# Symlink statusline script
-rm -rf $HOME/.claude/statusline.sh
-ln -s $(pwd)/statusline.sh $HOME/.claude/statusline.sh
-chmod +x $(pwd)/statusline.sh
+# Prepare the JSON update before replacing any links.
+if [ -f "$settings" ]; then
+    cp -p "$settings" "$backup/settings.json"
+else
+    echo '{}' > "$backup/settings.json"
+fi
+jq '.statusLine = {type: "command", command: "bash \"$HOME/.claude/statusline.sh\""}' \
+    "$backup/settings.json" > "$backup/settings.new.json"
 
-# Configure statusline in settings.json
-SETTINGS=$HOME/.claude/settings.json
-[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-TMP=$(mktemp)
-jq '. + {"statusLine": {"type": "command", "command": "~/.claude/statusline.sh"}}' "$SETTINGS" > "$TMP" && mv "$TMP" "$SETTINGS"
+# Preserve each old file or folder, then link its versioned source.
+for name in CLAUDE.md rules statusline.sh; do
+    target="$HOME/.claude/$name"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$source_dir/$name" ]; then
+        continue
+    fi
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        mv "$target" "$backup/$name"
+    fi
+    ln -s "$source_dir/$name" "$target"
+done
 
-echo 'Done.'
+cat "$backup/settings.new.json" > "$settings"
+echo "Claude settings installed; previous files are in $backup"

@@ -1,0 +1,25 @@
+# Files, folders
+
+- Shell commands use relative paths or bare commands from the current directory, never absolute paths.
+- Where things go:
+  - `~/Work` holds only `Scratch/` (untracked) and `GitHub/` (repos).
+  - Temporary files go to `~/Work/Scratch/<topic>/`, never into the vault or a cloud folder.
+  - Papers: `~/NYU/Library/Articles/<topic>/authorYEARkeyword.pdf`. Books: `~/NYU/Library/Books/<topic>/Surname - ACRONYM.pdf`.
+- Show me files in Path Finder through PARA: `open -a "Path Finder" ~/PARA/Projects/<name>`, and give `~/PARA/…` paths.
+- PARA: `~/PARA` is `~/Dropbox/Apps/PARA`, outside any git repo, so each project home has its own memory. Never create a repo at or above it.
+  - `~/PARA/Projects/<name>/` is a real folder of links: `repo` → `~/Work/GitHub/<repo>`, `local` → the project's data folder (`~/NYU/…`, `~/Dropbox/…`), `g-drive` → a Google Drive folder, `note.md` → the vault note. Look at the sibling projects before creating one.
+  - A git repo never lives inside a cloud-synced folder (Dropbox, Google Drive): clone it into `~/Work/GitHub/` and link it as `repo`.
+- Both Macs are one front end used one at a time: mirror app config, data, state and cache through `~/Dropbox/Apps/<app>/`; never warn about sync conflicts. Terminal font size is per Mac on purpose.
+- Links under `/Volumes/` break when the SSD is unplugged: normal, never report it.
+- During a restructure, leave alone what works and wasn’t called broken (*e.g.* `~/Book`).
+- Images, photos and scans: read them yourself with Read; never build an OCR pipeline. Read every page I supplied.
+- PDFs:
+  - While rebuilding, open the PDF once with `open -a Skim` and let it reload itself.
+  - From about midnight, or when I ask, use Preview instead: first close every Preview document, because they all share one name.
+  - I read it myself. After an edit, give the page and a few words only.
+- PDFs in `~/Dropbox` carry my e-ink annotations:
+  - Before overwriting one, compare it with your last copy.
+  - To read my feedback, render the pages and also dump each annotation’s typed note (pymupdf `a.info["content"]`).
+  - Copies for the Boox go in `~/Dropbox/Boox/`: `Review/` for what I’m still reviewing (the copy you overwrite after checking it), `Finished/` once I call it done (never overwritten again), `Readings/` for what I read that you didn’t write, `Archive/` for what I’m done with.
+- Check behaviour by running things, without leaving test files behind. Never mutate my mailbox to check something.
+- Never silently discard text I typed (a reply, note, draft). Destroying it needs an explicit action and a warning.

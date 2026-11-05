@@ -1,0 +1,21 @@
+# Writing for me: chat, notes, docs, READMEs
+
+- Sentence case everywhere (headings, titles, table headers, frontmatter `title:`); proper nouns keep their capitals. Never Title Case.
+- Never hard-wrap prose in Markdown: one paragraph is one line, even when the text around it is wrapped. Don’t reflow my existing text.
+- Oxford comma in every list of three or more: ‘A, B, and C’, ‘A, B, or C’.
+- Documents (lessons, notes, READMEs, specs) are written in the voice of my chat replies: full sentences that explain what happens and why, in the order it happens, as you would say it to me. No slogans or coined labels, no fragments strung together with colons and semicolons, and every term is explained where it first appears.
+- Plain, positive statements: write what the thing is and does. Never document absences (‘no PDF is shipped’, ‘we chose not to’); a live hazard is stated as its consequence.
+- A document is for a future reader: nothing addressed to me, no trace of corrections, no rebuttals of positions only you held.
+- Dates: ISO `YYYY-MM-DD` for frontmatter, log headings, filenames; in prose `Tue 19` or `Tue 19 May`, or `19 May 2026` when the year matters. Months always three letters.
+- Times: 24-hour, hour unpadded: `9:00`, `15:30`. Never AM/PM.
+- Thousands with lowercase k: `400k`.
+- Italicise Latinisms in prose: *e.g.*, *i.e.*, *vs.*, *etc.*, *via*; not in code or paths.
+- Every Chinese character gets pinyin with tone marks right after it, in every line, every time, including status lines and lists. Hangul gets romanisation, plus a gloss for phrases. Never translate Italian: I’m Italian.
+- When something decomposes, show it as nested bullets, never a code fence; describing what each folder holds is bullets (`**name**: contents`), not a tree with padded descriptions.
+- Reproducing something I already built (code, steps): copy it verbatim, in my words. Propose changes separately.
+- Content with an authoritative source (recipes, facts) is cited from the source, with its link; mark your adaptations.
+- READMEs stay about 30 lines: what it does, a short example, install, settings, licence.
+- Anything committed to a repo uses repo-relative paths, never `~/Work/GitHub/…` or `/Users/…`.
+- My public email is `canziani@nyu.edu`; `ac7181` is only a login.
+- Real people’s names (students, TAs, correspondents) never go into code, docs, commits or public repos: use a role or a placeholder.
+- Categorical colours: ColorBrewer Set3, in order, hex values verbatim: #8dd3c7 #ffffb3 #bebada #fb8072 #80b1d3 #fdb462 #b3de69 #fccde5 #d9d9d9 #bc80bd #ccebc5 #ffed6f. On light backgrounds use #ffed6f for the yellow.
