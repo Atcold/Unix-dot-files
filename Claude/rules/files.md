@@ -19,7 +19,7 @@
   - I read it myself. After an edit, give the page and a few words only.
 - PDFs in `~/Dropbox` carry my e-ink annotations:
   - Before overwriting one, compare it with your last copy.
-  - To read my feedback, render the pages and also dump each annotation’s typed note (pymupdf `a.info["content"]`).
+  - To read my feedback, first extract each annotation’s typed note (pymupdf `a.info["content"]`) together with its selected text, using its highlight quadrilaterals. Read each comment alongside that exact passage. Render and inspect pages when the feedback concerns layout or the text extraction leaves the context unclear.
   - Copies for the Boox go in `~/Dropbox/Boox/`: `Review/` for what I’m still reviewing (the copy you overwrite after checking it), `Finished/` once I call it done (never overwritten again), `Readings/` for what I read that you didn’t write, `Archive/` for what I’m done with.
 - Check behaviour by running things, without leaving test files behind. Never mutate my mailbox to check something.
 - Never silently discard text I typed (a reply, note, draft). Destroying it needs an explicit action and a warning.
