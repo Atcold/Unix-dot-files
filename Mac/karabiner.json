@@ -5,6 +5,16 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "description": "F16 toggles local Whisper dictation",
+                        "manipulators": [
+                            {
+                                "type": "basic",
+                                "from": { "key_code": "f16" },
+                                "to": [{ "shell_command": "open -g \"$HOME/.local/share/whisper-dictation/Whisper Dictation.app\"", "repeat": false }]
+                            }
+                        ]
+                    },
+                    {
                         "description": "Readline keys outside terminals: ^W ^U ^K ^_ ^A ^E ^B ^F",
                         "manipulators": [
                             {
@@ -390,10 +400,6 @@
                 {
                     "from": { "key_code": "caps_lock" },
                     "to": [{ "key_code": "left_control" }]
-                },
-                {
-                    "from": { "key_code": "f16" },
-                    "to": [{ "consumer_key_code": "dictation" }]
                 }
             ],
             "virtual_hid_keyboard": { "keyboard_type_v2": "ansi" }
