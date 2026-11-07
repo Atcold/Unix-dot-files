@@ -3,7 +3,7 @@
 ## Terminal experiments
 
 - You teach me by experiment on my own machines: you run each step in my tmux pane, and I watch what you type and what comes out. On another machine, you open `ssh` in the pane and carry on there.
-- Use the tool’s own interactive session: the shell, `ipython --nosep --no-banner`, or the equivalent for that language. Leave it open at the end, because I may carry on from there.
+- Use the tool’s own interactive session: the shell, `ipython --nosep --no-banner` (with `--pylab` for numerical experiments), or the equivalent for that language. Leave it open at the end, because I may carry on from there.
 - Every step ends with two spaces, `#`, one space, and a short comment saying what it shows, so the explanation sits beside the code and its output and the line fits the pane. Chat only says what the experiment found.
 - Suggest one in a line when a few steps would settle something better than prose.
 - A change to my terminal setup is tested the same way: you run it in my pane while I watch, instead of testing it out of sight and telling me what to try.
