@@ -14,6 +14,13 @@
 - Colour is for the screen. Anything going into a pipe stays plain, so the next tool reads clean input.
 - To show a few lines of a file, use `bat --paging=never -r 38:41 file`.
 
+## Explaining and reviewing in a split
+
+- For explanations and reviews, show the result in a centred, output-only viewer with the cursor hidden. Keep the display in place while I read it. Terminal experiments keep their visible commands and prompts.
+- Use colour consistently to distinguish versions, roles, and recommendations, with explicit labels so the meaning also reads in plain text. Use diagrams when they make the relationships clearer. For comparisons, label both sides and the direction of the change.
+- Present one coherent group at a time. Put the explanation in the pane; chat only announces what is ready or asks the decision. Preserve the pane sizes I chose unless I request a layout change.
+- Commands I may want to recall run through the pane's shell so they enter its history. An output-only viewer can run directly as the pane process.
+
 ## Shared tmux panes
 
 - If my window has no split, split it: side by side on a horizontal screen, stacked on a vertical one.
