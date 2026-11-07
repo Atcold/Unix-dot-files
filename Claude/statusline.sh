@@ -27,65 +27,23 @@ fi
 # Computer name (macOS with Linux fallback)
 COMPUTER=$(networksetup -getcomputername 2>/dev/null || hostname -s)
 
-# --- Usage (5-hour session) ---
-# Per-Mac XDG cache, outside Dropbox: every session rewrites it, and in the synced ~/.claude
-# each overlapping write became a Dropbox conflicted copy
-CACHE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-statusline/usage"
-mkdir -p "${CACHE_FILE%/*}"
-usage_result=""
+# Claude Code supplies both account quotas after its first API response.
+# https://code.claude.com/docs/en/statusline#rate-limit-usage
+# Render in memory so each Mac uses its own session data.
+now_ts=$(date +%s)
 
-# Try cache first (valid for 5 minutes)
-if [ -f "$CACHE_FILE" ]; then
-    cache_ts=$(grep "^TIMESTAMP=" "$CACHE_FILE" 2>/dev/null | cut -d= -f2)
-    now_ts=$(date +%s)
-    if [ -n "$cache_ts" ] && [ $((now_ts - cache_ts)) -lt 300 ]; then
-        cache_util=$(grep "^UTILIZATION=" "$CACHE_FILE" | cut -d= -f2)
-        cache_reset=$(grep "^RESETS_AT=" "$CACHE_FILE" | cut -d= -f2)
-        [ -n "$cache_util" ] && usage_result="${cache_util}|${cache_reset}"
-    fi
-fi
-
-# Fall back to Swift fetcher (managed by Claude Usage Tracker app)
-if [ -z "$usage_result" ]; then
-    swift_result=$(swift "$HOME/.claude/fetch-claude-usage.swift" 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$swift_result" ]; then
-        utilization=$(echo "$swift_result" | cut -d'|' -f1)
-        resets_at=$(echo "$swift_result" | cut -d'|' -f2)
-        if [ -n "$utilization" ] && [[ "$utilization" != ERROR* ]]; then
-            usage_result="${utilization}|${resets_at}"
-            { echo "TIMESTAMP=$(date +%s)"; echo "UTILIZATION=${utilization}"; echo "RESETS_AT=${resets_at}"; } > "$CACHE_FILE.$$" &&
-                mv -f "$CACHE_FILE.$$" "$CACHE_FILE"   # whole file or nothing, for sessions reading it
-        fi
-    fi
-fi
-
-# --- Build usage block ---
-USAGE_TEXT=""
-if [ -n "$usage_result" ]; then
-    utilization=$(echo "$usage_result" | cut -d'|' -f1)
-    resets_at=$(echo "$usage_result" | cut -d'|' -f2)
-fi
-
-# Anything non-numeric (an ERROR string, a stale blank cache) would fail every
-# integer test below and fall through to the red branch — drop the block instead.
-case "$utilization" in ''|*[!0-9]*) usage_result="" ;; esac
-
-if [ -n "$usage_result" ]; then
-    # Reset time → also gives us where we stand in the 5-hour window
-    reset_epoch=""
-    if [ -n "$resets_at" ] && [ "$resets_at" != "null" ]; then
-        iso_time=$(echo "$resets_at" | sed 's/\.[0-9]*Z$//')
-        reset_epoch=$(date -ju -f "%Y-%m-%dT%H:%M:%S" "$iso_time" "+%s" 2>/dev/null)
-    fi
-
+build_usage() {
+    local utilization=$1 reset_epoch=$2 window_seconds=$3 label=$4 show_reset=$5
+    local elapsed_pct marker remaining projected filled bar i MARKER
+    local USAGE_COLOR PACE_COLOR reset_display sec rounded reset_time
     # Elapsed share of the window (percent), and the bar cell boundary it falls on
     elapsed_pct=-1
     marker=-1
     if [ -n "$reset_epoch" ]; then
-        remaining=$((reset_epoch - $(date +%s)))
+        remaining=$((reset_epoch - now_ts))
         [ $remaining -lt 0 ] && remaining=0
-        [ $remaining -gt 18000 ] && remaining=18000
-        elapsed_pct=$(( (18000 - remaining) * 100 / 18000 ))
+        [ "$remaining" -gt "$window_seconds" ] && remaining=$window_seconds
+        elapsed_pct=$(( (window_seconds - remaining) * 100 / window_seconds ))
         marker=$(( (elapsed_pct * 10 + 50) / 100 ))
     fi
 
@@ -96,9 +54,9 @@ if [ -n "$usage_result" ]; then
     else                                  USAGE_COLOR=$'\033[38;5;160m'  # red
     fi
 
-    # Pace colour (for the │ marker), mirroring the menu bar app's 6-tier spectrum:
+    # Pace colour (for the │ marker), using the existing 6-tier spectrum:
     # project current burn rate out to the reset and colour by where it lands.
-    # Too early to tell (< 30 min in) or window over → neutral, same as the app's nil.
+    # The first tenth of either window or a finished window stays neutral.
     # The floor matters: utilization is a whole percent, so a 9-minute-old window
     # turns one prompt (1%) into 33 projected points and paints the marker red.
     if [ $elapsed_pct -ge 10 ] && [ $elapsed_pct -lt 100 ]; then
@@ -130,15 +88,42 @@ if [ -n "$usage_result" ]; then
 
     # Reset time (24h), rounded to the nearest minute
     reset_display=""
-    if [ -n "$reset_epoch" ]; then
+    if [ "$show_reset" = yes ] || [ "$show_reset" = weekly ]; then
         sec=$((reset_epoch % 60))
         [ $sec -ge 30 ] && rounded=$((reset_epoch + 60 - sec)) || rounded=$((reset_epoch - sec))
-        reset_time=$(date -r "$rounded" "+%H:%M" 2>/dev/null)
+        if [ "$show_reset" = weekly ]; then
+            reset_time=$(LC_TIME=C date -r "$rounded" "+%a %-H:%M" 2>/dev/null)
+        else
+            reset_time=$(date -r "$rounded" "+%H:%M" 2>/dev/null)
+        fi
         [ -n "$reset_time" ] && reset_display=" → ${reset_time}"
     fi
 
-    USAGE_TEXT=$'\033[2m'"${USAGE_COLOR}${utilization}% ${bar}${reset_display}"
-fi
+    printf '%s' $'\033[2m'"${USAGE_COLOR}${label}${utilization}% ${bar}${reset_display}"
+}
+
+USAGE_TEXT=""
+WEEKLY_TEXT=""
+for window in five_hour seven_day; do
+    [ "$window" = five_hour ] && window_seconds=18000 || window_seconds=604800
+    # Windows may be absent before the first response or after their reset.
+    # Compare weekly consumption with elapsed time before rounding the display.
+    values=$(echo "$input" | jq -r --arg window "$window" --argjson now "$now_ts" --argjson duration "$window_seconds" '
+        .rate_limits[$window]
+        | select(type == "object")
+        | select((.used_percentage | type) == "number" and (.resets_at | type) == "number")
+        | select(.used_percentage >= 0 and .used_percentage <= 100 and .resets_at > $now)
+        | [(.used_percentage | round), (.resets_at | floor),
+           (.used_percentage * $duration > ($duration - ([.resets_at - $now, $duration] | min)) * 100)]
+        | @tsv' 2>/dev/null)
+    [ -z "$values" ] && continue
+    IFS=$'\t' read -r utilization reset_epoch over_pace <<< "$values"
+    if [ "$window" = five_hour ]; then
+        USAGE_TEXT=$(build_usage "$utilization" "$reset_epoch" "$window_seconds" "" yes)
+    elif [ "$over_pace" = true ]; then
+        WEEKLY_TEXT=$(build_usage "$utilization" "$reset_epoch" "$window_seconds" "" weekly)
+    fi
+done
 
 # --- Colours ---
 MAGENTA=$'\033[1;35m'
@@ -151,6 +136,7 @@ RESET=$'\033[0m'
 
 # --- Assemble ---
 LINE="${MAGENTA}${MODEL}${WHITE}@${BLUE}${COMPUTER} ${YELLOW}${SHORT_DIR}${RESET}${GIT_INFO} ${DIM}${PCT}% ctx${RESET}"
-[ -n "$USAGE_TEXT" ] && LINE="${LINE} ${GRAY}│${RESET} ${USAGE_TEXT}${RESET}"
+[ -n "$USAGE_TEXT" ] && LINE="${LINE} ${GRAY}·${RESET} ${USAGE_TEXT}${RESET}"
+[ -n "$WEEKLY_TEXT" ] && LINE="${LINE} ${GRAY}·${RESET} ${WEEKLY_TEXT}${RESET}"
 
 printf "%s\n" "$LINE"

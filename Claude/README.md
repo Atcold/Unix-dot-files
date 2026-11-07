@@ -8,15 +8,8 @@ Application homes can be shared through Dropbox using symlinks. Each machine kee
 
 `settings.example.json` contains portable preferences and the machine-identification SessionStart hook. Merge the desired fields into the existing runtime settings, preserving permissions and application-managed fields.
 
-`install.sh` uses Bash for links and backups and requires `jq` to update JSON. It also updates the status-line command while preserving the other runtime settings. The usage scripts use macOS Keychain credentials. Application-generated fetchers may contain credentials and remain in the runtime home.
+`install.sh` uses Bash for links and backups and requires `jq` to update JSON. It updates the status-line command while preserving the other runtime settings.
 
-## Rotating the claude.ai session key
+The status line reads five-hour and weekly account usage from Claude Code’s [status-line input](https://code.claude.com/docs/en/statusline#rate-limit-usage), including the percentage consumed and reset time. Usage becomes available after the session’s first API response. Colours, quota boxes, the elapsed-time marker, and the local reset time are rendered in Bash from that input.
 
-The session key for the usage tracker is stored in the macOS Keychain (never in files).
-When the key is compromised or expires:
-
-1. Log out of claude.ai in the browser to invalidate the old key
-2. Log back in
-3. Run `~/.claude/rotate-session-key.sh` and follow the prompts
-
-The script reads the new `sessionKey` cookie value (DevTools → Application → Cookies → claude.ai) and updates the Keychain entry. The Swift fetcher (`fetch-claude-usage.swift`) picks it up automatically.
+The weekly block appears beside the five-hour block when the percentage consumed exceeds the elapsed share of the seven-day window. The comparison uses the supplied percentage before rounding the boxes. Its local reset weekday and time distinguish it from the five-hour block, which retains its reset time.
