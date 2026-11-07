@@ -5,11 +5,16 @@
             "complex_modifications": {
                 "rules": [
                     {
-                        "description": "F16 toggles local Whisper dictation",
+                        "description": "F16 or Control-Option-D toggles local Whisper dictation",
                         "manipulators": [
                             {
                                 "type": "basic",
                                 "from": { "key_code": "f16" },
+                                "to": [{ "shell_command": "open -g \"$HOME/.local/share/whisper-dictation/Whisper Dictation.app\"", "repeat": false }]
+                            },
+                            {
+                                "type": "basic",
+                                "from": { "key_code": "d", "modifiers": { "mandatory": ["control", "option"] } },
                                 "to": [{ "shell_command": "open -g \"$HOME/.local/share/whisper-dictation/Whisper Dictation.app\"", "repeat": false }]
                             }
                         ]
