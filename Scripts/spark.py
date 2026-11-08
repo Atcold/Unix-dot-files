@@ -8,7 +8,8 @@
 The plug is switched through TP-Link's cloud, as the Kasa app does it, so this
 works outside the LAN too. The machine itself is reached over the tailnet.
 
-  spark status          plug state and power; the machine on the tailnet
+  spark status          plug state and power; the machine on the tailnet; the model and its tunnel
+  spark wattage         live wattage chart, redrawn every second ([q] quits)
   spark on [--wait]     power on; --wait: until ssh answers
   spark off             clean shutdown over ssh, then plug off
   spark restart         off, then on --wait
@@ -18,14 +19,17 @@ works outside the LAN too. The machine itself is reached over the tailnet.
 # reads it and runs the file in a cached environment with those dependencies.
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 import time
 import tomllib
+from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG = Path.home() / ".config/spark/config.toml"
-DEFAULTS = {"plug": "AlfSPARK", "host": "alfspark", "keychain": "tplink-cloud"}
+DEFAULTS = {"plug": "AlfSPARK", "host": "alfspark", "keychain": "tplink-cloud",
+            "container": "Qwen3.8-Flash-Next", "port": 8000}
 RUNNING_W = 10  # above this, the machine is running (AlfSPARK idles at ~24 W)
 STANDBY_W = 5   # below this, it is shut down (its standby draw is ~1.4 W)
 
@@ -113,6 +117,85 @@ def ssh_up(host):
                           capture_output=True).returncode == 0
 
 
+def tunnel_open(port):
+    # The tunnel is an ssh with a Mac listener on the port: the listener is its visible half
+    r = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+                       capture_output=True, text=True)
+    return "ssh" in r.stdout
+
+
+def model_ready(port):
+    # /health answers empty with exit 0 once vLLM serves; --max-time keeps status brisk
+    return subprocess.run(["curl", "-s", "--max-time", "3", f"http://127.0.0.1:{port}/health"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def uptime_text(started):
+    # docker inspect gives the start time in RFC 3339 UTC, nanoseconds included;
+    # fromisoformat stops at microseconds, so trim to the 26 characters it can read
+    t = datetime.fromisoformat(started[:26]).replace(tzinfo=timezone.utc)
+    d, rem = divmod(int((datetime.now(timezone.utc) - t).total_seconds()), 86400)
+    h, m = divmod(rem // 60, 60)
+    return f"{d} d {h} h {m} m" if d else f"{h} h {m} m"
+
+
+def dumb_plot(rows, title):
+    """One gnuplot dumb-terminal render of (epoch, watts) pairs, sized to the screen."""
+    cols, _ = shutil.get_terminal_size((80, 20))
+    # gnuplot prints time as UTC: shift the epochs by the Mac's own offset, so the
+    # axis says wall-clock time, which is what the numbers on a home gadget should be
+    off = datetime.now().astimezone().utcoffset().total_seconds()
+    # Colour only on a terminal (same rule as the rest): curve in Set3 blue, axis frame dim
+    term = (f"set terminal dumb size {cols},14 ansirgb; set border lc rgb '#555555';"
+            if USE_COLOR else f"set terminal dumb size {cols},14;")
+    p = subprocess.run(
+        ["gnuplot", "-e",
+         term + " set datafile separator ','; unset key;"
+                " set timefmt '%s'; set xdata time; set format x '%H:%M:%S'; set yrange [0:*];"
+                " set style line 1 lc rgb '#80b1d3' lw 2;"
+                " plot '-' using 1:2 with lines ls 1"],
+        input="\n".join(f"{t + off:.0f},{w}" for t, w in rows),
+        capture_output=True, text=True)
+    if p.returncode:
+        err("gnuplot: " + p.stderr.strip())
+    # The dumb terminal cannot put its key outside the box: print the title above the chart
+    return title + "\n" + p.stdout
+
+
+async def live(cfg):
+    from collections import deque
+    import select
+    import termios
+    import tty
+    plug = await find_plug(cfg)
+    # Keep only the newest samples that fit: one per column, so the chart scrolls
+    # instead of squeezing the whole history into the same width
+    samples = deque(maxlen=max(30, shutil.get_terminal_size((80, 20)).columns - 12))
+    # cbreak mode so a lone q quits without Return; the terminal is restored either way
+    fd = sys.stdin.fileno() if sys.stdin.isatty() else None
+    old = termios.tcgetattr(fd) if fd is not None else None
+    if fd is not None:
+        tty.setcbreak(fd)
+    try:
+        while True:
+            w = await watts(plug)
+            samples.append((time.time(), w))
+            # Cursor home + erase-to-end instead of `clear`: the chart repaints in place
+            # instead of wiping the screen each second, which flashed
+            sys.stdout.write("\033[H\033[J")
+            print(dumb_plot(list(samples), accent(f"{w:.1f} W now ([q] quits)")).rstrip())
+            if fd is not None:
+                # select waits up to a second for a keystroke: it is the tick and the q reader
+                if select.select([sys.stdin], [], [], 1.0)[0] and sys.stdin.read(1).lower() == "q":
+                    break
+            else:
+                await asyncio.sleep(1.0)
+    finally:
+        if old is not None:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        print()
+
+
 async def status(cfg):
     plug = await find_plug(cfg)
     on = await plug.is_on()
@@ -131,6 +214,29 @@ async def status(cfg):
     print(f"{dim('plug')}    {bold(cfg['plug'])}: {green('on') if on else red('off')}, "
           f"{accent(f'{w:.1f} W')} -> {bold(cfg['host'])} {state}")
     print(f"{dim('tailnet')} {bold(cfg['host'])}: {path}")
+    if on and w > RUNNING_W:
+        # One ssh asks Docker both states; the start timestamp gives d/h/m uptime,
+        # finer than docker ps's coarse string. BatchMode: no password can block status.
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2", cfg["host"],
+                            f"docker inspect -f '{{{{.State.Status}}}} {{{{.State.StartedAt}}}}' "
+                            f"{cfg['container']}"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            gone = "No such" in r.stderr or "not found" in r.stderr
+            print(f"{dim('model')}   {bold(cfg['container'])}: "
+                  f"{red('stopped') if gone else red('ssh refused')}")
+        else:
+            state, _, started = r.stdout.strip().partition(" ")
+            if state == "running":
+                print(f"{dim('model')}   {bold(cfg['container'])}: "
+                      f"{green(f'running {uptime_text(started)}')}")
+            else:
+                print(f"{dim('model')}   {bold(cfg['container'])}: {yellow(state)}")
+        if tunnel_open(cfg["port"]):
+            api = green("ready") if model_ready(cfg["port"]) else yellow("still loading")
+            print(f"{dim('llm')}     :{cfg['port']} {bold('open')}, API {api}")
+        else:
+            print(f"{dim('llm')}     :{cfg['port']} {red('no tunnel')}")
 
 
 async def power_on(cfg, wait):
@@ -195,7 +301,8 @@ def setup(cfg):
 
 # command: (what it does, [(option, what it does)]), as tg-mail's gmail lists them
 COMMANDS = {
-    "status": ("Plug state and power; the machine on the tailnet.", []),
+    "status": ("Plug state and power; the machine on the tailnet; the model and its tunnel.", []),
+    "wattage": ("Live terminal chart of the wattage, redrawn each second ([q] quits).", []),
     "on": ("Power on; boots the machine if it is shut down.",
            [("--wait", "Wait until ssh answers, and print the boot time.")]),
     "off": ("Clean shutdown over ssh, then plug off.", []),
@@ -263,6 +370,8 @@ def main():
             setup(cfg)
         elif command == "status":
             asyncio.run(status(cfg))
+        elif command == "wattage":
+            asyncio.run(live(cfg))
         elif command == "on":
             asyncio.run(power_on(cfg, "--wait" in args))
         elif command == "off":
