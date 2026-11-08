@@ -13,12 +13,19 @@ works outside the LAN too. The machine itself is reached over the tailnet.
   spark on [--wait]     power on; --wait: until ssh answers
   spark off             clean shutdown over ssh, then plug off
   spark restart         off, then on --wait
+  spark models          the model store on the Spark: org/name, size, what is served
+  spark service list    every service on the Spark: state, uptime, image, forwarded port
+  spark service up      start a service, open its tunnel, wait for its API    [service-name]
+  spark service down    stop a service                                         [service-name]
   spark setup           names in ~/.config/spark/config.toml, login in the Keychain
 """
 # The block above `"""` is inline script metadata (PEP 723): `uv run --script`
 # reads it and runs the file in a cached environment with those dependencies.
 import asyncio
+import json
 import os
+import re
+import textwrap
 import shutil
 import subprocess
 import sys
@@ -28,8 +35,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG = Path.home() / ".config/spark/config.toml"
+# Fallbacks for a missing key: config.toml is the record of everything configurable.
+# services maps container name to [local, remote]; service names the default, the LLM server.
 DEFAULTS = {"plug": "AlfSPARK", "host": "alfspark", "keychain": "tplink-cloud",
-            "container": "Qwen3.8-Flash-Next", "port": 8000}
+            "service-name": "Qwen3.8-Flash-Next", "port": 8000,
+            # the hf CLI on the host, from voice-lab's venv: spark models shells out to it
+            "hf": "~/voice-lab/hf/.venv/bin/hf",
+            "services": {"Qwen3.8-Flash-Next": [8000, 8000]}}
 RUNNING_W = 10  # above this, the machine is running (AlfSPARK idles at ~24 W)
 STANDBY_W = 5   # below this, it is shut down (its standby draw is ~1.4 W)
 
@@ -56,7 +68,11 @@ def err(msg): sys.exit(red("✗ ") + msg)
 def config():
     cfg = dict(DEFAULTS)
     if CONFIG.exists():
-        cfg.update(tomllib.loads(CONFIG.read_text()))
+        loaded = tomllib.loads(CONFIG.read_text())
+        # [services] merges into the built-in, so the file may list only extra services
+        if "services" in loaded:
+            loaded["services"] = {**DEFAULTS["services"], **loaded["services"]}
+        cfg.update(loaded)
     return cfg
 
 
@@ -117,17 +133,38 @@ def ssh_up(host):
                           capture_output=True).returncode == 0
 
 
-def tunnel_open(port):
-    # The tunnel is an ssh with a Mac listener on the port: the listener is its visible half
-    r = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+def tunnel(port):
+    """('listen-port', 'target') of the ssh -L tunnel on the port; None if nobody listens,
+    a name if something other than ssh holds the port."""
+    # -t: PIDs only; then ps gives the defining command line, as shown in the lesson
+    r = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
                        capture_output=True, text=True)
-    return "ssh" in r.stdout
+    if not r.stdout.split():
+        return None
+    cmd = subprocess.run(["ps", "-o", "command=", "-p", r.stdout.split()[0]],
+                         capture_output=True, text=True).stdout.split()
+    if not cmd or cmd[0].split("/")[-1] != "ssh" or "-L" not in cmd:
+        return cmd[0].split("/")[-1] if cmd else "unknown"
+    return cmd[cmd.index("-L") + 1], cmd[-1]
+
+
+def mac_name():
+    # Each Mac signs its own listener: the name comes from the machine, never the config,
+    # which is shared through Dropbox
+    return subprocess.run(["scutil", "--get", "LocalHostName"],
+                          capture_output=True, text=True).stdout.strip() or "Mac"
 
 
 def model_ready(port):
     # /health answers empty with exit 0 once vLLM serves; --max-time keeps status brisk
     return subprocess.run(["curl", "-s", "--max-time", "3", f"http://127.0.0.1:{port}/health"],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def dur(secs):
+    # Spoken units: 264 reads as nobody, "4 min 24 s" reads as how long
+    m, s = divmod(int(secs), 60)
+    return f"{m} min {s:02d} s" if m else f"{s} s"
 
 
 def uptime_text(started):
@@ -219,24 +256,31 @@ async def status(cfg):
         # finer than docker ps's coarse string. BatchMode: no password can block status.
         r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2", cfg["host"],
                             f"docker inspect -f '{{{{.State.Status}}}} {{{{.State.StartedAt}}}}' "
-                            f"{cfg['container']}"],
+                            f"{cfg["service-name"]}"],
                            capture_output=True, text=True)
         if r.returncode != 0:
             gone = "No such" in r.stderr or "not found" in r.stderr
-            print(f"{dim('model')}   {bold(cfg['container'])}: "
+            print(f"{dim('model')}   {bold(cfg["service-name"])}: "
                   f"{red('stopped') if gone else red('ssh refused')}")
         else:
             state, _, started = r.stdout.strip().partition(" ")
             if state == "running":
-                print(f"{dim('model')}   {bold(cfg['container'])}: "
+                print(f"{dim('model')}   {bold(cfg["service-name"])}: "
                       f"{green(f'running {uptime_text(started)}')}")
             else:
-                print(f"{dim('model')}   {bold(cfg['container'])}: {yellow(state)}")
-        if tunnel_open(cfg["port"]):
-            api = green("ready") if model_ready(cfg["port"]) else yellow("still loading")
-            print(f"{dim('llm')}     :{cfg['port']} {bold('open')}, API {api}")
+                print(f"{dim('model')}   {bold(cfg["service-name"])}: {yellow(state)}")
+        local, _ = service_ports(cfg, cfg["service-name"])
+        t = tunnel(local)
+        if isinstance(t, tuple):
+            spec, target = t  # -L spec and the machine ssh dials, read off the live process
+            lport, dport = spec.split(":")[1], spec.split(":")[-1]
+            pair = f"{bold(mac_name())}:{accent(lport)} {dim('→')} {bold(target)}:{accent(dport)}"
+            api = green("ready") if model_ready(local) else yellow("still loading")
+            print(f"{dim('api')}     {pair} {green('open')}, {api}")
+        elif t is None:
+            print(f"{dim('api')}     {red('no tunnel')} on {bold(mac_name())}:{accent(local)}")
         else:
-            print(f"{dim('llm')}     :{cfg['port']} {red('no tunnel')}")
+            print(f"{dim('api')}     :{local} {red(f'held by {t}, not ssh')}")
 
 
 async def power_on(cfg, wait):
@@ -283,6 +327,190 @@ async def restart(cfg):
     await power_on(cfg, wait=True)
 
 
+def ssh_docker(cfg, *docker_cmd):
+    # Plain docker over ssh works for this account on the Spark; no sudo needed
+    return subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", cfg["host"],
+                           "docker", *docker_cmd], capture_output=True, text=True)
+
+
+def service_ports(cfg, name):
+    # A [services] line is `name = port` (both ends) or `name = local:remote`;
+    # the legacy port key covers only the default container
+    v = cfg["services"].get(name)
+    if v is None:
+        return (cfg["port"], cfg["port"]) if name == cfg["service-name"] else (None, None)
+    if isinstance(v, (list, tuple)):
+        return int(v[0]), int(v[1])
+    if isinstance(v, int):
+        return v, v
+    local, _, remote = str(v).partition(":")  # "8000:8000" also parses
+    return int(local), int(remote or local)
+
+
+def service_list(cfg):
+    if not ssh_up(cfg["host"]):
+        err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark on')} first")
+    # Quoted for the remote shell: the \t stays a two-character escape that docker expands
+    r = ssh_docker(cfg, "ps", "-a", "--format",
+                   "'{{.Names}}\\t{{.State}}\\t{{.Status}}\\t{{.Image}}'")
+    if r.returncode != 0:
+        err(f"docker ps: {r.stderr.strip().splitlines()[-1]}")
+    rows = sorted((l.split("\t") for l in r.stdout.splitlines() if l.strip()))
+    if not rows:
+        print(dim(f"no services on {cfg['host']}"))
+        return
+    if not any(row[0] == cfg["service-name"] for row in rows):
+        # (default) marks the config's pick; say so when the pick names nothing here
+        print(yellow(f"⚠ config's service-name {bold(cfg['service-name'])} matches no container "
+                     f"on {cfg['host']}"))
+    width = max(len(n) for n, *_ in rows) + 2
+    for name, state, status, image in rows:
+        label = bold(name) + dim("  (default)") if name == cfg["service-name"] else dim(name)
+        st = green(state) if state == "running" else red(state)
+        local, remote = service_ports(cfg, name)
+        fwd = (dim(f"  :{remote}") + (dim(f" (Mac :{local})") if local != remote else "")
+               if local else dim("  no port"))
+        print(f"  {label}{' ' * (width - len(name))}{st} {dim(status)}  {dim(image)}{fwd}")
+
+
+def service_up(cfg, name):
+    name = name or cfg["service-name"]
+    if not ssh_up(cfg["host"]):
+        err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark on')} first")
+    local, remote = service_ports(cfg, name)
+    if local is None:
+        err(f"no port for {bold(name)}: add "
+            f"{bold(f'{name} = [local, remote]')} to [services] in the config")
+    state = ssh_docker(cfg, "inspect", "-f", "{{.State.Status}}", name)
+    if state.returncode != 0:
+        err(f"{bold(name)} on {cfg['host']}: {state.stderr.strip().splitlines()[-1]} "
+            f"({cyan('spark service list')} shows what exists)")
+    if state.stdout.strip() == "running":
+        ok(f"{bold(name)} already running")
+    else:
+        started = ssh_docker(cfg, "start", name)
+        if started.returncode != 0:
+            err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
+        ok(f"{bold(name)}: {green('started')}")
+    if not isinstance(tunnel(local), tuple):
+        # -fN backgrounds a connection with no commands: forwarding is its only job,
+        # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
+        r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
+                            "-o", "ServerAliveInterval=30", "-L",
+                            f"127.0.0.1:{local}:127.0.0.1:{remote}", cfg["host"]],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            err(f"tunnel: {r.stderr.strip()}")
+        ends = f":{local}" if local == remote else f":{local} → :{remote}"
+        ok(f"tunnel {ends} {green('open')}")
+    else:
+        ok(f"tunnel :{local} already open")
+    if name != cfg["service-name"]:
+        ok(f"{bold(name)} up; no health check known for it, {cyan('spark service list')} to see state")
+        return
+    # Only the default LLM server is known to answer vLLM's /health, asked on the local end
+    # One line, redrawn each poll: the container's newest log line tells what vLLM is
+    # doing now (downloading shards, compiling, warming up) next to an elapsed timer
+    start, frame, shown = time.monotonic(), 0, 0
+    while not model_ready(local):
+        elapsed = time.monotonic() - start
+        if elapsed > 900:
+            err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
+        line = ssh_docker(cfg, "logs", "--tail", "1", "--no-log-prefix", name).stdout.strip()
+        line = re.sub(r"\x1b\[[0-9;]*m", "", line).splitlines()[-1:] or [""]
+        bar = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[frame % 10]
+        text = f"  {accent(bar + ' ' + dur(elapsed))}  {dim(line[0][:56])}"
+        print("\r" + text.ljust(max(shown, 78)), end="", flush=True)
+        shown, frame = len(text), frame + 1
+        time.sleep(5)
+    print("\r" + " " * max(shown, 78) + "\r", end="")
+    ok(f"API ready after {accent(dur(time.monotonic() - start))}")
+
+
+def service_down(cfg, name):
+    name = name or cfg["service-name"]
+    if not ssh_up(cfg["host"]):
+        ok(f"{bold(cfg['host'])} is already down")
+        return
+    state = ssh_docker(cfg, "inspect", "-f", "{{.State.Status}}", name)
+    if state.returncode != 0:
+        err(f"{bold(name)} on {cfg['host']}: {state.stderr.strip().splitlines()[-1]}")
+    if state.stdout.strip() == "running":
+        stopped = ssh_docker(cfg, "stop", name)
+        if stopped.returncode != 0:
+            err(f"docker stop: {stopped.stderr.strip().splitlines()[-1]}")
+        ok(f"{bold(name)}: {red('stopped')}")
+    else:
+        ok(f"{bold(name)} already stopped")
+    # The tunnel only exists to forward this service's pair, so down closes it —
+    # but only when the listener really is this service's ssh, never someone else's
+    local, remote = service_ports(cfg, name)
+    held = tunnel(local) if local else None
+    if isinstance(held, tuple):
+        spec, target = held
+        if spec == f"127.0.0.1:{local}:127.0.0.1:{remote}" and target == cfg["host"]:
+            pid = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{local}", "-sTCP:LISTEN"],
+                                 capture_output=True, text=True).stdout.split()[0]
+            subprocess.run(["kill", pid])
+            ok(f"tunnel :{local} {red('closed')}")
+        else:
+            ok(f"tunnel :{local} left open: not this service's ({dim(f'-L {spec} → {target}')})")
+    elif isinstance(held, str):
+        ok(f"tunnel :{local} left alone: {held} holds the port, not ssh")
+
+
+def served_models(cfg):
+    """Model ids the running containers were launched to serve, read off Config.Cmd."""
+    served = set()
+    names = ssh_docker(cfg, "ps", "--format", "{{.Names}}").stdout.split()
+    for name in names:
+        # quoted: the format has a space, and ssh re-joins the words for the remote shell
+        raw = ssh_docker(cfg, "inspect", "-f", "'{{json .Config.Cmd}}'", name).stdout
+        try:
+            args = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        # vLLM takes the id as the value of --model, or as the bare first argument
+        # (["serve", "nvidia/..."]); either way it is the first token with a slash
+        i = args.index("--model") + 1 if "--model" in args else 0
+        id_ = next((a for a in args[i:] if "/" in a and not a.startswith("-")), None)
+        if id_:
+            served.add(id_)
+    return served
+
+
+def models(cfg):
+    if not ssh_up(cfg["host"]):
+        err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark on')} first")
+    # The remote shell expands the ~ of the hf path
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", cfg["host"],
+                        f"{cfg['hf']} cache ls --format json"], capture_output=True, text=True)
+    if r.returncode != 0:
+        err(f"hf cache ls: {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode} "
+            f"(the hf path lives under {bold('hf')} in the config)")
+    try:
+        rows = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        err(f"Unexpected output from {bold(cfg['hf'])}; check the {bold('hf')} key in the config")
+    served = served_models(cfg)
+
+    def weight(row):  # sort by bytes: 102.3G > 7.7G > 306.5M
+        s, unit = row["size"][:-1], row["size"][-1]
+        return float(s) * {"K": 1e-3, "M": 1, "G": 1e3, "T": 1e6}.get(unit, 1)
+
+    w_id = max(len(row["repo_id"]) for row in rows) + 2
+    w_sz = max(len(row["size"]) for row in rows)
+    w_la = max(len(row["last_accessed"]) for row in rows)
+    print("  " + dim("model".ljust(w_id) + "size".rjust(w_sz) + "  "
+                     + "last access".ljust(w_la)))
+    for row in sorted(rows, key=weight, reverse=True):
+        mark = green("  ← served") if row["repo_id"] in served else ""
+        org, _, model = row["repo_id"].partition("/")  # the author's hand, then the model
+        print(f"  {cyan(org + '/')}{bold(model)}{' ' * (w_id - len(row['repo_id']))}"
+              f"{accent(row['size'].rjust(w_sz))}  {dim(row['last_accessed'].ljust(w_la))}{mark}")
+    print(dim(f"\n  {len(rows)} models on {cfg['host']}, from {cfg['hf']}"))
+
+
 def setup(cfg):
     # Every question first, then the writes: a cancel half-way changes nothing
     plug = input(f"plug name [{cfg['plug']}]: ") or cfg["plug"]
@@ -295,7 +523,13 @@ def setup(cfg):
         err(f"Keychain item {bold(cfg['keychain'])} not updated; nothing written.")
     ok(f"TP-Link login in the Keychain, item {bold(cfg['keychain'])}")
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(f'plug = "{plug}"\nhost = "{host}"\nkeychain = "{cfg["keychain"]}"\n')
+    # The file holds the whole picture: every setting, plus every service as a port pair
+    services = "\n".join(f'"{n}" = [{l}, {r}]'
+                         for n, (l, r) in ((n, service_ports(cfg, n)) for n in cfg["services"]))
+    CONFIG.write_text(f'plug = "{plug}"\nhost = "{host}"\nkeychain = "{cfg["keychain"]}"\n'
+                      f'service-name = "{cfg["service-name"]}"\nhf = "{cfg["hf"]}"\n\n[services]\n'
+                      f'# service-name = [local, remote]: the Mac listens on local, '
+                      f'the Spark serves on remote\n{services}\n')
     ok(f"wrote {bold(str(CONFIG))}")
 
 
@@ -307,11 +541,41 @@ COMMANDS = {
            [("--wait", "Wait until ssh answers, and print the boot time.")]),
     "off": ("Clean shutdown over ssh, then plug off.", []),
     "restart": ("off, then on --wait.", []),
+    "models": ("The model store on the Spark: org/name, size, last access, and what is served.", []),
+    "service list": ("Every service on the Spark: state, uptime, image, forwarded port.", []),
+    "service up": ("Start a service, open its tunnel, wait for its API.", []),
+    "service down": ("Stop a service.", []),
     "setup": ("Once per machine: the plug, the machine, and your TP-Link login.", []),
 }
 
+# Positional slots shown in the Usage line, in order
+USAGE = {"service up": "[service-name]", "service down": "[service-name]"}
+
+
 # What `spark <command> --help` adds below the one-line summary
 DETAILS = {
+    "models": [
+        f"Runs the {bold('hf')} CLI on {bold(DEFAULTS['host'])} (the {bold('hf')} key of the "
+        f"config) and shows its cache inventory, heaviest first.",
+        f"{dim('← served')} marks the ids the running containers were launched to serve "
+        f"({bold('docker inspect')}).",
+    ],
+    "service up": [
+        f"The {bold('service-name')} is a line of the {bold('[services]')} table; omit it for",
+        f"the config's {cyan('service-name')}.",
+        f"The {bold('ports')} are that line's pair, {cyan('service-name = [local, remote]')},",
+        f"in {bold('~/.config/spark/config.toml')}.",
+        f"The {bold('tunnel')} is {bold('Mac 127.0.0.1:<local>')} {dim('→')} "
+        f"{bold(DEFAULTS['host'] + ' 127.0.0.1:<remote>')}.",
+        f"{bold('Finally')} it retries {bold('http://127.0.0.1:<local>/health')} until the API",
+        f"reports ready {dim('(only the LLM server has such an endpoint; other services')}",
+        f"{dim('start without any wait)')}.",
+    ],
+    "service down": [
+        f"The {bold('service-name')} is a line of the {bold('[services]')} table; omit it for",
+        f"the config's {cyan('service-name')}.",
+        f"The {bold('tunnel')} is left standing; {cyan('spark status')} still reports it.",
+    ],
     "setup": [
         "Asks four things, then writes:",
         f"  {cyan('plug name    ')}  the plug's name in the Kasa app {dim('(Enter:')} {accent('AlfSPARK')}{dim(')')}",
@@ -325,27 +589,66 @@ DETAILS = {
 
 
 def usage(command=""):
-    """`spark`, `spark --help`, and `spark <command> --help`, coloured like gmail's."""
+    """`spark`, `spark --help`, `spark service`, and `spark <command> --help`, coloured like gmail's."""
+    if command == "service":
+        subs = [(n[len("service "):], what) for n, (what, _) in COMMANDS.items()
+                if n.startswith("service ")]
+        width = max(len(n) for n, _ in subs) + 2
+        print("\n" + accent("spark service") + dim(" — the services on ") +
+              bold(DEFAULTS["host"]) + dim(", and the tunnels to them"))
+        print("\n" + bold("Usage"))
+        print("  " + cyan("spark service") + dim(" <subcommand> [service-name]"))
+        print("\n" + bold("Subcommands"))
+        for name, what in subs:
+            print(f"  {cyan(name.ljust(width))}{what}")
+        # Each subcommand's own lines, so the whole picture is on one screen;
+        # a subcommand with nothing to add, like list, stays just its summary above
+        for name, _ in subs:
+            key = f"service {name}"
+            if lines := DETAILS.get(key):
+                print("\n" + dim("─" * 78) + "\n")
+                print(accent(f"spark service {name}") + dim(" — " + COMMANDS[key][0]))
+                print("\n" + bold("Usage"))
+                print("  " + cyan(f"spark service {name}") + " " + dim(USAGE[key]))
+                print("\n" + "\n".join("  " + line for line in lines))
+        print()
+        return
     width = max(len(n) for n in COMMANDS) + 2
     if command:
         what, options = COMMANDS[command]
-        print("\n" + accent(f"spark {command}") + dim(" — ") + what)
-        if command in DETAILS:
-            print("\n" + "\n".join("  " + line for line in DETAILS[command]))
+        slots = " " + USAGE[command] if command in USAGE else ""
+        print("\n" + accent(f"spark {command}") + dim(slots + " — " + what))
         print("\n" + bold("Usage"))
-        print("  " + cyan(f"spark {command}") + (dim(" [--options]") if options else ""))
+        slots = USAGE.get(command, "").split() + (["[--options]"] if options else [])
+        print("  " + cyan(f"spark {command}") + (dim(" " + " ".join(slots)) if slots else ""))
         if options:
             print("\n" + bold("Options"))
             for flag, does in options:
                 print(f"  {cyan(flag.ljust(width))}{does}")
+        if command in DETAILS:
+            print("\n" + "\n".join("  " + line for line in DETAILS[command]))
     else:
         print("\n" + accent("spark") + dim(" — power a machine on a Kasa smart plug, from anywhere"))
         print(dim("The plug through TP-Link's cloud, the machine over the tailnet."))
         print("\n" + bold("Usage"))
         print("  " + cyan("spark") + dim(" <command> [--options]"))
         print("\n" + bold("Commands"))
-        for name, (what, options) in COMMANDS.items():
-            print(f"  {cyan(name.ljust(width))}{what}")
+        # The service subcommands have their own screen; here, service is one line
+        shown = []
+        for name, entry in COMMANDS.items():
+            if name.startswith("service "):
+                if not any(n == "service" for n, _ in shown):
+                    shown.append(("service", ("Services on the Spark and their tunnels: "
+                                              "spark service list, spark service up [service-name], "
+                                              "spark service down [service-name].", [])))
+            else:
+                shown.append((name, entry))
+        width = max(len(n) for n, _ in shown) + 2
+        for name, (what, options) in shown:
+            # Wrap long descriptions at 80 columns, indented under the command name
+            body = textwrap.fill(what, 80, initial_indent=" " * (2 + width),
+                                 subsequent_indent=" " * (2 + width)).lstrip()
+            print(f"  {cyan(name.ljust(width))}{body}")
             for flag, does in options:
                 print(f"      {cyan(flag)}  {does}")
     print()
@@ -353,9 +656,15 @@ def usage(command=""):
 
 def main():
     args = sys.argv[1:]
-    command = next((a for a in args if not a.startswith("-")), "")
-    if not command or command == "help" or "-h" in args or "--help" in args:
-        usage(command if command in COMMANDS else "")
+    positional = [a for a in args if not a.startswith("-")]
+    command = positional[0] if positional else ""
+    if command == "service":
+        # Two-word commands: spark service list / up / down, optional service-name
+        command = "service " + positional[1] if len(positional) > 1 else "service"
+    arg = positional[2] if len(positional) > 2 else None  # the optional service name
+    # Bare spark and spark help list the commands; bare spark service lists the service ones
+    if not command or command == "help" or command == "service" or "-h" in args or "--help" in args:
+        usage(command if command in COMMANDS or command == "service" else "")
         return
     if command not in COMMANDS:
         err(f"No command {bold(command)}. See {cyan('spark --help')}.")
@@ -378,6 +687,14 @@ def main():
             asyncio.run(power_off(cfg))
         elif command == "restart":
             asyncio.run(restart(cfg))
+        elif command == "models":
+            models(cfg)
+        elif command == "service list":
+            service_list(cfg)
+        elif command == "service up":
+            service_up(cfg, arg)
+        elif command == "service down":
+            service_down(cfg, arg)
     except (KeyboardInterrupt, EOFError):  # ^C, or ^D at a question: stop quietly
         print("\n" + dim("cancelled"))
         sys.exit(130)  # 128 + SIGINT, what a shell reports for ^C
