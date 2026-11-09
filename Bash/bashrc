@@ -28,7 +28,7 @@ alias   .4='cd ../../../../'
 alias   .5='cd ../../../../../'
 alias cca='claude --permission-mode auto'  # Claude Code, auto mode
 alias cxa='codex-ui --sandbox danger-full-access --ask-for-approval on-request'  # Codex, full access
-alias oca='OPENCODE_CONFIG_CONTENT="{\"instructions\":[\"note.md\"]}" ~/.opencode/bin/opencode --auto'  # OpenCode, auto-approve
+alias oca='OPENCODE_CONFIG_CONTENT="{\"instructions\":[\"note.md\"]}" opencode --auto'  # OpenCode, auto-approve
 
 # t1–t5: show tree of current dir up to depth N (e.g. t2 shows 2 levels)
 _t() {
