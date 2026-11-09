@@ -457,16 +457,21 @@ def serve(cfg, model=None, server=None):
             f"({cyan('spark serving')} shows what exists)")
     if state.stdout.strip() == "running":
         ok(f"{bold(name)} already running")
-        # the banner of this run can sit anywhere in the log: search all of it
-        log_start = 0
+        # attaching to a boot already in flight: its start lines are not this
+        # command's to claim, so no banner is looked for and only readiness is waited
+        run_since = None
     else:
+        # the run's own window in the log, told by the clock the daemon itself
+        # stamps. A reused container holds every earlier start, and reading the
+        # whole log lets an old run answer for the new one; a line-count cursor
+        # drifts when the daemon rotates or merges streams. --since filters where
+        # both slip.
+        run_since = subprocess.run(["ssh", cfg["host"], "date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
+                                   capture_output=True, text=True).stdout.strip()
         started = ssh_docker(cfg, "start", name)
         if started.returncode != 0:
             err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
         ok(f"{bold(name)}: {green('started')}")
-        # A reused container keeps every previous run's log: lines before this
-        # cursor belong to earlier starts, lines after it belong to this one
-        log_start = len(container_log(cfg, name).splitlines())
     if not isinstance(tunnel(local), tuple):
         # -fN backgrounds a connection with no commands: forwarding is its only job,
         # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
@@ -486,82 +491,104 @@ def serve(cfg, model=None, server=None):
         return
     # One line per phase, kept on screen as it completes: the server's own parser turns
     # the log into a percentage and a stage word, and a new phase starts a fresh line.
-    # The frame never waits on the network: the one full-log ssh read, every 5 s, runs
-    # in a thread, and the main loop stays local with three redraw clocks matched to
-    # what the eye follows: the spinner turns twice a second, the timer once, and the
-    # bar only as often as a fetch brings new numbers; a bar refresh and a timer tick
-    # never share a pass.
+    # The frame never waits on the network: the log read and the health probe run in a
+    # thread every 5 s (a health probe can idle for seconds behind a busy tunnel, and
+    # a frame that stalls on one makes the timer freeze and jump). The main loop only
+    # repaints four times a second: the spinner turns every pass, the timer text is
+    # rewritten on its own second boundary, and the bar changes only when a fetch
+    # brought new numbers.
     parse = STAGE_PARSER[server]
     start = time.monotonic()
     stop_fetch = threading.Event()
     live = {"phase": "waiting", "pct": None, "stage": "waiting for the first log line",
-            "last": "", "art": None}
+            "last": "", "art": None, "ready": False}
 
     def fetch_loop():
-        # one read feeds the phases, the newest line and vLLM's opening banner: the
-        # banner (block art, version, model) lands some seconds after docker start,
-        # so it is looked for in every slice past the cursor until it appears
+        # one read feeds everything: the phases, the health answer, and vLLM's opening
+        # banner (block art, version, model), which lands some seconds after docker
+        # start and is searched for in the run's window until it appears. run_since
+        # None (attaching to a boot already in flight) keeps the whole log for the
+        # phases and skips the banner: an earlier one is not this run's.
         while not stop_fetch.is_set():
-            log = container_log(cfg, name).splitlines()
+            log = container_log(cfg, name, since=run_since).splitlines()
             live["phase"], live["pct"], live["stage"] = parse(cfg, name, log)
-            newest = [l.strip() for l in log if l.strip()]
-            live["last"] = newest[-1][:60] if newest else ""
-            if live["art"] is None:
-                live["art"] = banner_lines(log[log_start:])
+            if run_since and live["art"] is None:
+                live["art"] = banner_lines(log)
+            live["ready"] = model_ready(local)
             stop_fetch.wait(5)
 
     threading.Thread(target=fetch_loop, daemon=True).start()
-    banner_shown, shown = False, 0
+
+    def width(s):
+        # printed characters, not bytes: a coloured line carries many more bytes than
+        # it shows, and padding or wrapping counted on those wrote past the pane edge
+        return len(re.sub(r"\x1b\[[0-9;]*m", "", s))
+
+    def pad_to(s, w):
+        # ljust would count the escape bytes and add nothing to a coloured line,
+        # leaving the tail of the line it overwrites: pad on printed characters
+        return s + " " * max(0, w - width(s))
+
+    # no line, and no padding of one, may reach the pane's last column: a line that
+    # wraps leaves its overflow on the next row, where a later single-row redraw
+    # cannot erase it (the leftover tails on screen were exactly this)
+    term = max(60, shutil.get_terminal_size((100, 24)).columns - 2)
+
+    def done_line():
+        return f"{accent('✓')} {dim(stage)}  {accent(dur(time.monotonic() - start))}"
+
+    banner_shown, shown = False, ""
     phase, pct, stage = live["phase"], live["pct"], live["stage"]
-    phase_at, spin_at, bar_at = start, start, start
-    timer_shown, tick = "0 s", 0
+    tick, timer_shown, bar_done = 0, "0 s", False
     try:
-        while not model_ready(local):
+        while not live["ready"]:
             now = time.monotonic()
             if now - start > 900:
                 err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
             if live["art"] and not banner_shown:
                 if shown:  # wipe the live progress line before the block
-                    print("\r" + " " * max(shown, 78) + "\r", end="")
-                    shown = 0
+                    print("\r" + " " * min(max(width(shown), 78), term) + "\r", end="")
+                    shown = ""
                 for line in live["art"]:
                     print("  " + accent(re.sub(r"^.*\]\s?", "", line)))
                 banner_shown = True
-            if live["phase"] != phase and shown:  # freeze the finished line over the old
-                # one (padded as wide, so no debris of the longer bar line survives)
-                print(f"\r{accent('✓')} {dim(stage)}  {accent(dur(now - start))}"
-                      .ljust(max(shown, 78)))
-                shown = 0
             if (live["phase"], live["stage"]) != (phase, stage):
-                phase, pct, stage, phase_at = live["phase"], live["pct"], live["stage"], now
-            if pct == 100 and now - phase_at > 15:
-                # a routing bar parked at its end while the log still holds the same
-                # phase: name that state and show the newest log line instead of a
-                # bar frozen at 100 % pretending nothing is happening
-                stage = f"routing done, waiting for the next phase  {dim(live['last'])}"
-            bar_due = now - bar_at >= 5
-            if bar_due:
-                bar_at = now
-            elif now - spin_at >= 0.5:
-                timer_shown = accent(dur(now - start))  # the timer rides spinner
-            elif now - spin_at < 0.5 and not bar_due:    # passes, never bar passes
-                time.sleep(0.25)
-                continue
-            if pct is not None:
+                if shown:
+                    pad = min(max(width(shown), 78), term)
+                    if not bar_done and phase != "waiting":
+                        # a phase whose bar never completed still closes with its check
+                        print("\r" + pad_to(done_line(), pad))
+                    else:
+                        # its check already stands: wipe the waiting line, no second check
+                        print("\r" + " " * pad + "\r", end="")
+                    shown = ""
+                phase, pct, stage = live["phase"], live["pct"], live["stage"]
+                bar_done = False
+            if pct == 100 and not bar_done and shown:
+                # the bar's end is its finish: the check line with the time stands,
+                # the bar itself goes, and a quiet spinner waits out the gap to the
+                # next phase rather than reprinting 100 % as if still working
+                print("\r" + pad_to(done_line(), min(max(width(shown), 78), term)))
+                shown = ""
+                bar_done = True
+            tick += 1
+            if tick % 4 == 0:  # the timer moves on the second, never with a bar change
+                timer_shown = accent(dur(now - start))
+            if pct is not None and not bar_done:
                 cells = pct // 5
                 text = (f"  {accent('█' * cells + '░' * (20 - cells))} {accent(f'{pct:3d}%')} "
                         f"{dim(stage)}  {timer_shown}")
             else:
-                tick += 1
                 spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[tick % 10]
-                text = f"  {accent(spin)} {dim(stage)}  {timer_shown}"
-            print("\r" + text.ljust(max(shown, 78)), end="", flush=True)
-            shown, spin_at = len(text), now
+                quiet = "waiting for the next phase" if bar_done else stage
+                text = f"  {accent(spin)} {dim(quiet)}  {timer_shown}"
+            print("\r" + pad_to(text, min(max(width(shown), 78), term)), end="", flush=True)
+            shown = text
+            time.sleep(0.25)
     finally:
         stop_fetch.set()
     if shown:  # the last phase closes with the ready line; nothing is erased
-        print(f"\r{accent('✓')} {dim(stage)}  {accent(dur(time.monotonic() - start))}"
-              .ljust(max(shown, 78)))
+        print("\r" + pad_to(done_line(), min(max(width(shown), 78), term)))
     ok(f"API ready after {accent(dur(time.monotonic() - start))}")
 
 
@@ -615,10 +642,11 @@ def banner_lines(lines):
     return run if len(run) >= 3 else None
 
 
-def container_log(cfg, name, tail=None):
+def container_log(cfg, name, tail=None, since=None):
     # docker logs writes to stderr, so ssh_docker's stdout alone is empty: merge both.
     # The Spark's docker is too old for --no-log-prefix; strip the stamp and colour here.
-    r = ssh_docker(cfg, "logs", *(["--tail", str(tail)] if tail else []), name)
+    opts = (["--tail", str(tail)] if tail else []) + (["--since", since] if since else [])
+    r = ssh_docker(cfg, "logs", *opts, name)
     out = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout + r.stderr)
     return re.sub(r"^\d{4}-\d\d-\d\dT[\d:.]+Z ?", "", out, flags=re.M)
 
