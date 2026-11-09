@@ -429,167 +429,192 @@ def serve(cfg, model=None, server=None):
     if p is None:
         err(unknown_model(cfg, model or cfg["model"], server))
     model, server, local, remote, name = p
-    if not ssh_up(cfg["host"]):
-        # Ask the plug before blaming the machine: off at the plug is the common
-        # case, and only a machine already drawing power deserves the wait
-        _, on, w = asyncio.run(plug_state(cfg))
-        if on and w > RUNNING_W:
-            # Drawing real power without ssh: it is mid-boot, or sshd is asleep.
-            # Wait it out with the same 5 min window `spark on --wait` allows.
-            print(dim(f"waiting for ssh {cfg['host']}…"), flush=True)
-            start = time.monotonic()
-            while not ssh_up(cfg["host"]):
-                if time.monotonic() - start > 300:
-                    err(f"{bold(cfg['host'])} powered on but not answering ssh after {dur(300)}: "
-                        f"{cyan('spark status')} and {cyan('spark serving')} say more")
-                time.sleep(1)
-            ok(f"{bold(cfg['host'])} up after {accent(f'{time.monotonic() - start:.0f} s')}")
-        else:
-            if not sys.stdin.isatty():
-                err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
-            if input(f"{bold(cfg['host'])} is powered off. Turn it on? [y] ").strip().lower() \
-                    not in ("", "y", "yes"):
-                err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
-            asyncio.run(power_on(cfg, wait=True))
-    state = ssh_docker(cfg, "inspect", "-f", "{{.State.Status}}", name)
-    if state.returncode != 0:
-        err(f"{bold(name)} on {cfg['host']}: {state.stderr.strip().splitlines()[-1]} "
-            f"({cyan('spark serving')} shows what exists)")
-    if state.stdout.strip() == "running":
-        ok(f"{bold(name)} already running")
-        # attaching to a boot already in flight: its start lines are not this
-        # command's to claim, so no banner is looked for and only readiness is waited
-        run_since = None
-    else:
-        # the run's own window in the log, told by the clock the daemon itself
-        # stamps. A reused container holds every earlier start, and reading the
-        # whole log lets an old run answer for the new one; a line-count cursor
-        # drifts when the daemon rotates or merges streams. --since filters where
-        # both slip.
-        run_since = subprocess.run(["ssh", cfg["host"], "date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
-                                   capture_output=True, text=True).stdout.strip()
-        started = ssh_docker(cfg, "start", name)
-        if started.returncode != 0:
-            err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
-        ok(f"{bold(name)}: {green('started')}")
-    if not isinstance(tunnel(local), tuple):
-        # -fN backgrounds a connection with no commands: forwarding is its only job,
-        # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
-        r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
-                            "-o", "ServerAliveInterval=30", "-L",
-                            f"127.0.0.1:{local}:127.0.0.1:{remote}", cfg["host"]],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            err(f"tunnel: {r.stderr.strip()}")
-        ends = f":{local}" if local == remote else f":{local} → :{remote}"
-        ok(f"tunnel {ends} {green('open')}")
-    else:
-        ok(f"tunnel :{local} already open")
-    if server not in STAGE_PARSER:  # only a server spark can read is waited for
-        ok(f"{bold(name)} up; {bold(server)} has no health check spark knows, "
-           f"{cyan('spark serving')} to see state")
-        return
-    # One line per phase, kept on screen as it completes: the server's own parser turns
-    # the log into a percentage and a stage word, and a new phase starts a fresh line.
-    # The frame never waits on the network: the log read and the health probe run in a
-    # thread every 5 s (a health probe can idle for seconds behind a busy tunnel, and
-    # a frame that stalls on one makes the timer freeze and jump). The main loop only
-    # repaints four times a second: the spinner turns every pass, the timer text is
-    # rewritten on its own second boundary, and the bar changes only when a fetch
-    # brought new numbers.
-    parse = STAGE_PARSER[server]
-    start = time.monotonic()
-    stop_fetch = threading.Event()
-    live = {"phase": "waiting", "pct": None, "stage": "waiting for the first log line",
-            "last": "", "art": None, "ready": False}
-
-    def fetch_loop():
-        # one read feeds everything: the phases, the health answer, and vLLM's opening
-        # banner (block art, version, model), which lands some seconds after docker
-        # start and is searched for in the run's window until it appears. run_since
-        # None (attaching to a boot already in flight) keeps the whole log for the
-        # phases and skips the banner: an earlier one is not this run's.
-        while not stop_fetch.is_set():
-            log = container_log(cfg, name, since=run_since).splitlines()
-            live["phase"], live["pct"], live["stage"] = parse(cfg, name, log)
-            if run_since and live["art"] is None:
-                live["art"] = banner_lines(log)
-            live["ready"] = model_ready(local)
-            stop_fetch.wait(5)
-
-    threading.Thread(target=fetch_loop, daemon=True).start()
-
-    def width(s):
-        # printed characters, not bytes: a coloured line carries many more bytes than
-        # it shows, and padding or wrapping counted on those wrote past the pane edge
-        return len(re.sub(r"\x1b\[[0-9;]*m", "", s))
-
-    def pad_to(s, w):
-        # ljust would count the escape bytes and add nothing to a coloured line,
-        # leaving the tail of the line it overwrites: pad on printed characters
-        return s + " " * max(0, w - width(s))
-
-    # no line, and no padding of one, may reach the pane's last column: a line that
-    # wraps leaves its overflow on the next row, where a later single-row redraw
-    # cannot erase it (the leftover tails on screen were exactly this)
-    term = max(60, shutil.get_terminal_size((100, 24)).columns - 2)
-
-    def done_line():
-        return f"{accent('✓')} {dim(stage)}  {accent(dur(time.monotonic() - start))}"
-
-    banner_shown, shown = False, ""
-    phase, pct, stage = live["phase"], live["pct"], live["stage"]
-    tick, timer_shown, bar_done = 0, "0 s", False
+    # the cursor goes away the moment Enter is pressed, not when the repaint
+    # block starts: everything below either prints lines or waits, never asks
+    sys.stdout.write("\033[?25l")
     try:
-        while not live["ready"]:
-            now = time.monotonic()
-            if now - start > 900:
-                err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
-            if live["art"] and not banner_shown:
-                if shown:  # wipe the live progress line before the block
-                    print("\r" + " " * min(max(width(shown), 78), term) + "\r", end="")
-                    shown = ""
-                for line in live["art"]:
-                    print("  " + accent(re.sub(r"^.*\]\s?", "", line)))
-                banner_shown = True
-            if (live["phase"], live["stage"]) != (phase, stage):
-                if shown:
-                    pad = min(max(width(shown), 78), term)
-                    if not bar_done and phase != "waiting":
-                        # a phase whose bar never completed still closes with its check
-                        print("\r" + pad_to(done_line(), pad))
-                    else:
-                        # its check already stands: wipe the waiting line, no second check
-                        print("\r" + " " * pad + "\r", end="")
-                    shown = ""
-                phase, pct, stage = live["phase"], live["pct"], live["stage"]
-                bar_done = False
-            if pct == 100 and not bar_done and shown:
-                # the bar's end is its finish: the check line with the time stands,
-                # the bar itself goes, and a quiet spinner waits out the gap to the
-                # next phase rather than reprinting 100 % as if still working
-                print("\r" + pad_to(done_line(), min(max(width(shown), 78), term)))
-                shown = ""
-                bar_done = True
-            tick += 1
-            if tick % 4 == 0:  # the timer moves on the second, never with a bar change
-                timer_shown = accent(dur(now - start))
-            if pct is not None and not bar_done:
-                cells = pct // 5
-                text = (f"  {accent('█' * cells + '░' * (20 - cells))} {accent(f'{pct:3d}%')} "
-                        f"{dim(stage)}  {timer_shown}")
+        if not ssh_up(cfg["host"]):
+            # Ask the plug before blaming the machine: off at the plug is the common
+            # case, and only a machine already drawing power deserves the wait
+            _, on, w = asyncio.run(plug_state(cfg))
+            if on and w > RUNNING_W:
+                # Drawing real power without ssh: it is mid-boot, or sshd is asleep.
+                # Wait it out with the same 5 min window `spark on --wait` allows.
+                print(dim(f"waiting for ssh {cfg['host']}…"), flush=True)
+                start = time.monotonic()
+                while not ssh_up(cfg["host"]):
+                    if time.monotonic() - start > 300:
+                        err(f"{bold(cfg['host'])} powered on but not answering ssh after {dur(300)}: "
+                            f"{cyan('spark status')} and {cyan('spark serving')} say more")
+                    time.sleep(1)
+                ok(f"{bold(cfg['host'])} up after {accent(f'{time.monotonic() - start:.0f} s')}")
             else:
-                spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[tick % 10]
-                quiet = "waiting for the next phase" if bar_done else stage
-                text = f"  {accent(spin)} {dim(quiet)}  {timer_shown}"
-            print("\r" + pad_to(text, min(max(width(shown), 78), term)), end="", flush=True)
-            shown = text
-            time.sleep(0.25)
+                if not sys.stdin.isatty():
+                    err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
+                sys.stdout.write("\033[?25h")  # a question is asked: cursor back
+                answer = input(f"{bold(cfg['host'])} is powered off. Turn it on? [y] ")
+                sys.stdout.write("\033[?25l")
+                if answer.strip().lower() not in ("", "y", "yes"):
+                    err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
+                asyncio.run(power_on(cfg, wait=True))
+        state = ssh_docker(cfg, "inspect", "-f", "{{.State.Status}}", name)
+        if state.returncode != 0:
+            err(f"{bold(name)} on {cfg['host']}: {state.stderr.strip().splitlines()[-1]} "
+                f"({cyan('spark serving')} shows what exists)")
+        if state.stdout.strip() == "running":
+            ok(f"{bold(name)} already running")
+            # attaching to a boot already in flight: its start lines are not this
+            # command's to claim, so no banner is looked for and only readiness is waited
+            run_since = None
+        else:
+            # the run's own window in the log, told by the clock the daemon itself
+            # stamps. A reused container holds every earlier start, and reading the
+            # whole log lets an old run answer for the new one; a line-count cursor
+            # drifts when the daemon rotates or merges streams. --since filters where
+            # both slip.
+            run_since = subprocess.run(["ssh", cfg["host"], "date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
+                                       capture_output=True, text=True).stdout.strip()
+            started = ssh_docker(cfg, "start", name)
+            if started.returncode != 0:
+                err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
+            ok(f"{bold(name)}: {green('started')}")
+        if not isinstance(tunnel(local), tuple):
+            # -fN backgrounds a connection with no commands: forwarding is its only job,
+            # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
+            r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
+                                "-o", "ServerAliveInterval=30", "-L",
+                                f"127.0.0.1:{local}:127.0.0.1:{remote}", cfg["host"]],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                err(f"tunnel: {r.stderr.strip()}")
+            ends = f":{local}" if local == remote else f":{local} → :{remote}"
+            ok(f"tunnel {ends} {green('open')}")
+        else:
+            ok(f"tunnel :{local} already open")
+        if server not in STAGE_PARSER:  # only a server spark can read is waited for
+            ok(f"{bold(name)} up; {bold(server)} has no health check spark knows, "
+               f"{cyan('spark serving')} to see state")
+            return
+        # One line per phase, kept on screen as it completes: the server's own parser turns
+        # the log into a percentage and a stage word, and a new phase starts a fresh line.
+        # The frame never waits on the network: the log read and the health probe run in a
+        # thread every 5 s (a health probe can idle for seconds behind a busy tunnel, and
+        # a frame that stalls on one makes the timer freeze and jump). The main loop only
+        # repaints four times a second: the spinner turns every pass, the timer text is
+        # rewritten on its own second boundary, and the bar changes only when a fetch
+        # brought new numbers.
+        parse = STAGE_PARSER[server]
+        start = time.monotonic()
+        stop_fetch = threading.Event()
+        live = {"phase": "waiting", "pct": None, "stage": "waiting for the first log line",
+                "last": "", "art": None, "ready": False, "all": []}
+
+        def fetch_loop():
+            # one read feeds everything: the phases, the health answer, and vLLM's opening
+            # banner (block art, version, model), which lands some seconds after docker
+            # start and is searched for in the run's window until it appears. run_since
+            # None (attaching to a boot already in flight) keeps the whole log for the
+            # phases and skips the banner: an earlier one is not this run's.
+            while not stop_fetch.is_set():
+                log = container_log(cfg, name, since=run_since).splitlines()
+                live["phase"], live["pct"], live["stage"], live["all"] = parse(cfg, name, log)
+                if run_since and live["art"] is None:
+                    live["art"] = banner_lines(log)
+                live["ready"] = model_ready(local)
+                stop_fetch.wait(5)
+
+        threading.Thread(target=fetch_loop, daemon=True).start()
+
+        def width(s):
+            # printed characters, not bytes: a coloured line carries many more bytes than
+            # it shows, and padding or wrapping counted on those wrote past the pane edge
+            return len(re.sub(r"\x1b\[[0-9;]*m", "", s))
+
+        def pad_to(s, w):
+            # ljust would count the escape bytes and add nothing to a coloured line,
+            # leaving the tail of the line it overwrites: pad on printed characters
+            return s + " " * max(0, w - width(s))
+
+        # no line, and no padding of one, may reach the pane's last column: a line that
+        # wraps leaves its overflow on the next row, where a later single-row redraw
+        # cannot erase it (the leftover tails on screen were exactly this)
+        term = max(60, shutil.get_terminal_size((100, 24)).columns - 2)
+
+        def elapsed(at=None):
+            return accent(dur((time.monotonic() if at is None else at) - start))
+
+        # one ordered list drives the whole screen — banner, a check per finished phase,
+        # one live line — and every pass repaints the block. No line is ever erased,
+        # reused or closed by hand: the earlier attempts kept that bookkeeping in
+        # variables (freeze flags, wipe-on-change, emitted sets) and every bug this
+        # session lived in it. The wattage chart repaints its whole block per tick and
+        # has never misbehaved; this is the same shape.
+        phase, pct, stage = live["phase"], live["pct"], live["stage"]
+        tick, timer_shown = 0, "0 s"
+        finished, seen_at, painted, painted_w = [], {}, 0, 0
+        stage_of = {}  # every stage text ever seen per phase: a check must not depend on
+
+        def check_rows(now):  # the current log read still holding the line it came from
+            rows = [accent(re.sub(r"^.*\]\s?", "", a)) for a in (live["art"] or [])]
+            for pid in finished:
+                rows.append(f"{accent('✓')} {dim(stage_of.get(pid, 'done'))}  {elapsed(seen_at.get(pid, now))}")
+            return rows
+
+        sys.stdout.write("\033[?25l")  # the block owns the screen: hide the cursor,
+        try:                            # restore it whatever way we leave (finally)
+            while not live["ready"]:
+                now = time.monotonic()
+                if now - start > 900:
+                    err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
+                if live["phase"] == phase:  # within a phase the live line updates in place
+                    pct, stage = live["pct"], live["stage"]
+                else:
+                    phase, pct, stage = live["phase"], live["pct"], live["stage"]
+                for pid, _, st in live["all"]:
+                    stage_of[pid] = st
+                    seen_at.setdefault(pid, now)
+                    if pid == live["phase"] and pid not in finished:
+                        seen_at[pid] = now  # still running: its time is its latest sighting
+                ids = [pid for pid, _, _ in live["all"]]
+                for pid in ids[:ids.index(live["phase"])] if live["phase"] in ids else []:
+                    if pid not in finished:
+                        finished.append(pid)  # a later phase in the log means this one is over
+                tick += 1
+                if tick % 4 == 0:
+                    timer_shown = accent(dur(now - start))
+                if pct is not None and pct < 100:
+                    cells = pct // 5
+                    live_line = (f"  {accent('█' * cells + '░' * (20 - cells))} {accent(f'{pct:3d}%')} "
+                                 f"{dim(stage)}  {timer_shown}")
+                else:
+                    spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[tick % 10]
+                    wait = "waiting for the next phase" if pct == 100 else stage
+                    live_line = f"  {accent(spin)} {dim(wait)}  {timer_shown}"
+                    if pct == 100 and phase not in finished:
+                        finished.append(phase)  # the bar reached its end: the check stands
+                rows = check_rows(now) + [live_line]
+                w = min(max(78, painted_w, max(width(r) for r in rows)), term)
+                if painted:
+                    print("\r" + "\033[A" * (painted - 1), end="")
+                print("\033[J", end="")
+                print("\n".join(pad_to(r, w) for r in rows), end="", flush=True)
+                painted, painted_w = len(rows), w
+                time.sleep(0.25)
+        finally:
+            stop_fetch.set()
+            sys.stdout.write("\033[?25h")
+        for pid, _, _ in live["all"]:  # ready: every phase the log mentions stands checked
+            if pid not in finished:
+                finished.append(pid)
+        rows = check_rows(time.monotonic())
+        if painted:
+            print("\r" + "\033[A" * (painted - 1), end="")
+        print("\033[J", end="")
+        for r in rows:
+            print(r)
+        ok(f"API ready after {accent(dur(time.monotonic() - start))}")
     finally:
-        stop_fetch.set()
-    if shown:  # the last phase closes with the ready line; nothing is erased
-        print("\r" + pad_to(done_line(), min(max(width(shown), 78), term)))
-    ok(f"API ready after {accent(dur(time.monotonic() - start))}")
+        sys.stdout.write("\033[?25h")
 
 
 def unserve(cfg, model=None, server=None):
@@ -652,42 +677,61 @@ def container_log(cfg, name, tail=None, since=None):
 
 
 def vllm_b12x_stage(cfg, name, lines=None):
-    """(phase, percent or None, what it is doing) for the vLLM/B12X services. Each phase
-    names itself in the log; the newest match wins, so the lines below are the timeline
-    itself, nothing invented. A new phase id lets the caller start a fresh output line.
+    """(phase id, percent or None, what it is doing, [(id, percent, stage) per phase in
+    log order]) for the vLLM/B12X services. Each phase names itself in the log; the
+    newest match decides which phase is current, while every phase keeps its own
+    last-seen state, so one that finished between two reads still shows its ending and
+    the caller can print lines for phases it never saw current. A new phase id lets the
+    caller start a fresh output line, so ids must be stable within a phase: the routing
+    id names the set (all shards or the MTP head's filtered three), never the progress.
     lines: a whole log already read this pass, so a caller that fetched it reads once."""
     lines = [l.strip() for l in (lines if lines is not None else container_log(cfg, name).splitlines()) if l.strip()]
-    best = (-1, "waiting", None, "waiting for the first log line")
+    seen, newest, best = {}, -1, {}
     for i, line in enumerate(lines):
+        m = re.search(r"Safetensors index filter selected \d+/\d+ checkpoint shards", line)
+        if m:
+            seen["filtered"] = i
+            continue
         m = re.search(r"checkpoint shards: (\d+)/(\d+) shards routed, ([\d.]+) GB", line)
-        if m:  # main weights and the draft model route separately: totals tell them apart
-            cand = (i, f"route{m[2]}", 100 * int(m[1]) // max(int(m[2]), 1),
-                    f"routing shards {m[1]}/{m[2]}, {m[3]} GB")
-        elif "store kv cache" in line or "GPU KV cache size" in line:
-            cand = (i, "kv", None, "allocating the KV cache")
+        if m:  # the full checkpoint and the MTP head read separately: the filter line tells which
+            head = seen.get("filtered", -1) != -1 and i > seen["filtered"]
+            label = ("routing shards (MTP head) " if head else "routing shards ") \
+                    + f"{m[1]}/{m[2]}, {m[3]} GB"
+            cand = ("route-mtp" if head else f"route-main-{m[2]}",
+                    100 * int(m[1]) // max(int(m[2]), 1), label)
+        elif "GPU KV cache size" in line or "KV cache layout" in line:
+            # the allocation itself: the fp8 store-dtype message is a config print, not the event
+            cand = ("kv", None, "allocating the KV cache")
         elif "Capturing model for speculator" in line:
-            cand = (i, "spec", None, "warming up the speculator draft")
+            cand = ("spec", None, "warming up the speculator head")
         elif "Capturing prefill CUDA graphs" in line:
-            cand = (i, "cap-pre", None, "compiling prefill CUDA graphs")
+            cand = ("cap-pre", None, "compiling prefill CUDA graphs")
         elif "Capturing decode CUDA graphs" in line:
-            cand = (i, "cap-dec", None, "compiling decode CUDA graphs")
+            cand = ("cap-dec", None, "compiling decode CUDA graphs")
         elif "Capturing CUDA graphs" in line:
-            cand = (i, "cap", None, "compiling CUDA graphs")
+            cand = ("cap", None, "compiling CUDA graphs")
         elif "Started server process" in line or "Route: /v1" in line:
-            cand = (i, "api", None, "starting the API server")
+            cand = ("api", None, "starting the API server")
         else:
             continue
-        if i > best[0]:
-            best = cand
-    return best[1:]
+        pid, pct, stage = cand
+        if i >= best.get(pid, (-1,))[0]:
+            best[pid] = (i, pct, stage)
+        if i > newest:
+            newest, current = i, pid
+    if newest < 0:
+        return "waiting", None, "waiting for the first log line", []
+    states = [(pid, v[1], v[2]) for pid, v in sorted(best.items(), key=lambda kv: kv[1][0])]
+    return (current,) + best[current][1:] + (states,)
 
 
-def generic_stage(cfg, name, lines=None):
+def generic_stage(cfg, name, lines=None, model=None):
     """Unknown services get their plain newest log line, no percentage invented."""
     if lines is None:
         lines = container_log(cfg, name, tail=3).splitlines()
     lines = [l.strip() for l in lines if l.strip()]
-    return None, None, (lines[-1][:52] if lines else "waiting for the first log line")
+    last = lines[-1][:52] if lines else "waiting for the first log line"
+    return None, None, last, [(None, None, last)]
 
 
 # Each kind of server knows how to read its own startup log
