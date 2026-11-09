@@ -4,7 +4,11 @@
 - Never hard-wrap prose in Markdown: one paragraph is one line, even when the text around it is wrapped. Don’t reflow my existing text.
 - Oxford comma in every list of three or more: ‘A, B, and C’, ‘A, B, or C’.
 - Documents (lessons, notes, READMEs, specs) are written in the voice of my chat replies: full sentences that explain what happens and why, in the order it happens, as you would say it to me. No slogans or coined labels, no fragments strung together with colons and semicolons, and every term is explained where it first appears.
-- Plain, positive statements: write what the thing is and does. Never document absences (‘no PDF is shipped’, ‘we chose not to’); a live hazard is stated as its consequence.
+- Plain, positive statements: write what the thing is and does. Never document absences (‘no PDF is shipped’, ‘we chose not to’); a live hazard is stated as its consequence. This includes negating a thing that never existed (‘never a second copy’): state the positive fact and let it exclude the rest.
+- A ‘why’ section carries causes. A design decision is not a cause: label decisions as decisions rather than inflating them into reasons or goals, and leave a thin list thin instead of padding it.
+- State, don’t announce: not ‘the project has two goals’ but the goals themselves. ‘The first’ and ‘the second’ never point forward to items the reader has not met yet; write in the order the reader comes to know things.
+- Keep ‘both X and Y’ grammatically parallel, nouns of one kind; an explanation after the colon lists them in the same order.
+- When a sentence needs a coined phrase or dramatic verb to carry it (‘cut that call dead’, ‘bare completion endpoint’), drop the sentence and say plainly what happens.
 - A document is for a future reader: nothing addressed to me, no trace of corrections, no rebuttals of positions only you held.
 - Dates: ISO `YYYY-MM-DD` for frontmatter, log headings, filenames; in prose `Tue 19` or `Tue 19 May`, or `19 May 2026` when the year matters. Months always three letters.
 - Times: 24-hour, hour unpadded: `9:00`, `15:30`. Never AM/PM.
