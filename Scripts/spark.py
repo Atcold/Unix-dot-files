@@ -29,6 +29,7 @@ import textwrap
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 from datetime import datetime, timezone
@@ -289,6 +290,14 @@ async def status(cfg):
         print(f"{dim('api')}     {bold(mac_name())}:{accent(local)}: {api}")
 
 
+async def plug_state(cfg):
+    # (plug, on, watts) for callers outside status: serve asks the plug before
+    # blaming the machine, and watts tells off from a machine mid-boot
+    plug = await find_plug(cfg)
+    on = await plug.is_on()
+    return plug, on, (await watts(plug) if on else 0.0)
+
+
 async def power_on(cfg, wait):
     plug = await find_plug(cfg)
     if await plug.is_on():
@@ -421,18 +430,43 @@ def serve(cfg, model=None, server=None):
         err(unknown_model(cfg, model or cfg["model"], server))
     model, server, local, remote, name = p
     if not ssh_up(cfg["host"]):
-        err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark on')} first")
+        # Ask the plug before blaming the machine: off at the plug is the common
+        # case, and only a machine already drawing power deserves the wait
+        _, on, w = asyncio.run(plug_state(cfg))
+        if on and w > RUNNING_W:
+            # Drawing real power without ssh: it is mid-boot, or sshd is asleep.
+            # Wait it out with the same 5 min window `spark on --wait` allows.
+            print(dim(f"waiting for ssh {cfg['host']}…"), flush=True)
+            start = time.monotonic()
+            while not ssh_up(cfg["host"]):
+                if time.monotonic() - start > 300:
+                    err(f"{bold(cfg['host'])} powered on but not answering ssh after {dur(300)}: "
+                        f"{cyan('spark status')} and {cyan('spark serving')} say more")
+                time.sleep(1)
+            ok(f"{bold(cfg['host'])} up after {accent(f'{time.monotonic() - start:.0f} s')}")
+        else:
+            if not sys.stdin.isatty():
+                err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
+            if input(f"{bold(cfg['host'])} is powered off. Turn it on? [y] ").strip().lower() \
+                    not in ("", "y", "yes"):
+                err(f"{bold(cfg['host'])} is powered off: {cyan('spark on')} first")
+            asyncio.run(power_on(cfg, wait=True))
     state = ssh_docker(cfg, "inspect", "-f", "{{.State.Status}}", name)
     if state.returncode != 0:
         err(f"{bold(name)} on {cfg['host']}: {state.stderr.strip().splitlines()[-1]} "
             f"({cyan('spark serving')} shows what exists)")
     if state.stdout.strip() == "running":
         ok(f"{bold(name)} already running")
+        # the banner of this run can sit anywhere in the log: search all of it
+        log_start = 0
     else:
         started = ssh_docker(cfg, "start", name)
         if started.returncode != 0:
             err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
         ok(f"{bold(name)}: {green('started')}")
+        # A reused container keeps every previous run's log: lines before this
+        # cursor belong to earlier starts, lines after it belong to this one
+        log_start = len(container_log(cfg, name).splitlines())
     if not isinstance(tunnel(local), tuple):
         # -fN backgrounds a connection with no commands: forwarding is its only job,
         # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
@@ -450,46 +484,81 @@ def serve(cfg, model=None, server=None):
         ok(f"{bold(name)} up; {bold(server)} has no health check spark knows, "
            f"{cyan('spark serving')} to see state")
         return
-    # vLLM's opening banner (block art, version, model) is the log's first thing:
-    # show it as soon as it lands, so the load below is clearly this server's
-    for _ in range(20):
-        head = container_log(cfg, name, tail=8)
-        art = [l for l in head.splitlines()[:8] if re.search(r"[▀▄█]", l)]
-        if len(art) >= 3:  # the block letters have landed; their neighbours are noise
-            for line in art:
-                print("  " + accent(re.sub(r"^.*\]\s?", "", line)))
-            break
-        time.sleep(1)
     # One line per phase, kept on screen as it completes: the server's own parser turns
     # the log into a percentage and a stage word, and a new phase starts a fresh line.
-    # The log is re-read every 5 s; the current line redraws every half second.
+    # The frame never waits on the network: the one full-log ssh read, every 5 s, runs
+    # in a thread, and the main loop stays local with three redraw clocks matched to
+    # what the eye follows: the spinner turns twice a second, the timer once, and the
+    # bar only as often as a fetch brings new numbers; a bar refresh and a timer tick
+    # never share a pass.
     parse = STAGE_PARSER[server]
-    start, tick, shown, log_at = time.monotonic(), 0, 0, 0.0
-    phase, pct, stage = "waiting", None, "waiting for the first log line"
-    while not model_ready(local):
-        now = time.monotonic()
-        if now - start > 900:
-            err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
-        if now - log_at >= 5:
-            new_phase, new_pct, new_stage = parse(cfg, name)
-            if new_phase != phase and shown:  # freeze the finished line over the old
+    start = time.monotonic()
+    stop_fetch = threading.Event()
+    live = {"phase": "waiting", "pct": None, "stage": "waiting for the first log line",
+            "last": "", "art": None}
+
+    def fetch_loop():
+        # one read feeds the phases, the newest line and vLLM's opening banner: the
+        # banner (block art, version, model) lands some seconds after docker start,
+        # so it is looked for in every slice past the cursor until it appears
+        while not stop_fetch.is_set():
+            log = container_log(cfg, name).splitlines()
+            live["phase"], live["pct"], live["stage"] = parse(cfg, name, log)
+            newest = [l.strip() for l in log if l.strip()]
+            live["last"] = newest[-1][:60] if newest else ""
+            if live["art"] is None:
+                live["art"] = banner_lines(log[log_start:])
+            stop_fetch.wait(5)
+
+    threading.Thread(target=fetch_loop, daemon=True).start()
+    banner_shown, shown = False, 0
+    phase, pct, stage = live["phase"], live["pct"], live["stage"]
+    phase_at, spin_at, bar_at = start, start, start
+    timer_shown, tick = "0 s", 0
+    try:
+        while not model_ready(local):
+            now = time.monotonic()
+            if now - start > 900:
+                err(f"API not ready after {dur(900)}: {cyan('spark status')} to see where it stands")
+            if live["art"] and not banner_shown:
+                if shown:  # wipe the live progress line before the block
+                    print("\r" + " " * max(shown, 78) + "\r", end="")
+                    shown = 0
+                for line in live["art"]:
+                    print("  " + accent(re.sub(r"^.*\]\s?", "", line)))
+                banner_shown = True
+            if live["phase"] != phase and shown:  # freeze the finished line over the old
                 # one (padded as wide, so no debris of the longer bar line survives)
                 print(f"\r{accent('✓')} {dim(stage)}  {accent(dur(now - start))}"
                       .ljust(max(shown, 78)))
                 shown = 0
-            phase, pct, stage = new_phase, new_pct, new_stage
-            log_at = now
-        timer = accent(dur(now - start))
-        if pct is not None:
-            cells = pct // 5
-            text = (f"  {accent('█' * cells + '░' * (20 - cells))} {accent(f'{pct:3d}%')} "
-                    f"{dim(stage)}  {timer}")
-        else:
-            spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[tick % 10]
-            text = f"  {accent(spin)} {dim(stage)}  {timer}"
-        print("\r" + text.ljust(max(shown, 78)), end="", flush=True)
-        shown, tick = len(text), tick + 1
-        time.sleep(0.5)
+            if (live["phase"], live["stage"]) != (phase, stage):
+                phase, pct, stage, phase_at = live["phase"], live["pct"], live["stage"], now
+            if pct == 100 and now - phase_at > 15:
+                # a routing bar parked at its end while the log still holds the same
+                # phase: name that state and show the newest log line instead of a
+                # bar frozen at 100 % pretending nothing is happening
+                stage = f"routing done, waiting for the next phase  {dim(live['last'])}"
+            bar_due = now - bar_at >= 5
+            if bar_due:
+                bar_at = now
+            elif now - spin_at >= 0.5:
+                timer_shown = accent(dur(now - start))  # the timer rides spinner
+            elif now - spin_at < 0.5 and not bar_due:    # passes, never bar passes
+                time.sleep(0.25)
+                continue
+            if pct is not None:
+                cells = pct // 5
+                text = (f"  {accent('█' * cells + '░' * (20 - cells))} {accent(f'{pct:3d}%')} "
+                        f"{dim(stage)}  {timer_shown}")
+            else:
+                tick += 1
+                spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"[tick % 10]
+                text = f"  {accent(spin)} {dim(stage)}  {timer_shown}"
+            print("\r" + text.ljust(max(shown, 78)), end="", flush=True)
+            shown, spin_at = len(text), now
+    finally:
+        stop_fetch.set()
     if shown:  # the last phase closes with the ready line; nothing is erased
         print(f"\r{accent('✓')} {dim(stage)}  {accent(dur(time.monotonic() - start))}"
               .ljust(max(shown, 78)))
@@ -530,6 +599,22 @@ def unserve(cfg, model=None, server=None):
         ok(f"tunnel :{local} left alone: {held} holds the port, not ssh")
 
 
+def banner_lines(lines):
+    """The first run of three or more consecutive block-art lines, as vLLM prints
+    its opening banner in one block; None while it has not landed. tqdm progress
+    bars (CUDA graphs, shard routing) also draw block characters: the percent
+    sign and it/s tell them apart from the banner."""
+    run = []
+    for line in lines:
+        if re.search(r"[▀▄█]", line) and not re.search(r"%|\||it/s", line):
+            run.append(line)
+        elif len(run) >= 3:
+            return run
+        else:
+            run = []
+    return run if len(run) >= 3 else None
+
+
 def container_log(cfg, name, tail=None):
     # docker logs writes to stderr, so ssh_docker's stdout alone is empty: merge both.
     # The Spark's docker is too old for --no-log-prefix; strip the stamp and colour here.
@@ -538,11 +623,12 @@ def container_log(cfg, name, tail=None):
     return re.sub(r"^\d{4}-\d\d-\d\dT[\d:.]+Z ?", "", out, flags=re.M)
 
 
-def vllm_b12x_stage(cfg, name):
+def vllm_b12x_stage(cfg, name, lines=None):
     """(phase, percent or None, what it is doing) for the vLLM/B12X services. Each phase
     names itself in the log; the newest match wins, so the lines below are the timeline
-    itself, nothing invented. A new phase id lets the caller start a fresh output line."""
-    lines = [l.strip() for l in container_log(cfg, name).splitlines() if l.strip()]
+    itself, nothing invented. A new phase id lets the caller start a fresh output line.
+    lines: a whole log already read this pass, so a caller that fetched it reads once."""
+    lines = [l.strip() for l in (lines if lines is not None else container_log(cfg, name).splitlines()) if l.strip()]
     best = (-1, "waiting", None, "waiting for the first log line")
     for i, line in enumerate(lines):
         m = re.search(r"checkpoint shards: (\d+)/(\d+) shards routed, ([\d.]+) GB", line)
@@ -568,9 +654,11 @@ def vllm_b12x_stage(cfg, name):
     return best[1:]
 
 
-def generic_stage(cfg, name):
+def generic_stage(cfg, name, lines=None):
     """Unknown services get their plain newest log line, no percentage invented."""
-    lines = [l.strip() for l in container_log(cfg, name, tail=3).splitlines() if l.strip()]
+    if lines is None:
+        lines = container_log(cfg, name, tail=3).splitlines()
+    lines = [l.strip() for l in lines if l.strip()]
     return None, None, (lines[-1][:52] if lines else "waiting for the first log line")
 
 
