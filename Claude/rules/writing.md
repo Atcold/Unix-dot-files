@@ -18,6 +18,7 @@
 - When something decomposes, show it as nested bullets, never a code fence; describing what each folder holds is bullets (`**name**: contents`), not a tree with padded descriptions.
 - Reproducing something I already built (code, steps): copy it verbatim, in my words. Propose changes separately.
 - Content with an authoritative source (recipes, facts) is cited from the source, with its link; mark your adaptations.
+- My layout (margins, spacing, title block, fonts, styles) changes only when I request it, never to fit a length; a length target is soft, so content may run over.
 - READMEs stay about 30 lines: what it does, a short example, install, settings, licence.
 - Anything committed to a repo uses repo-relative paths, never `~/Work/GitHub/…` or `/Users/…`.
 - My public email is `canziani@nyu.edu`; `ac7181` is only a login.
