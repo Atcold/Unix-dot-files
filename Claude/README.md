@@ -6,7 +6,7 @@ From the repository root, run `bash Claude/install.sh` to link the global instru
 
 Application homes can be shared through Dropbox using symlinks. Each machine keeps its own checkout of this repository and must pull updates to keep instructions and rules aligned.
 
-`settings.example.json` contains portable preferences and the machine-identification SessionStart hook. Merge the desired fields into the existing runtime settings, preserving permissions and application-managed fields.
+`settings.base.json` holds the settings I own: attribution, model, effort, the status line, and the hooks. `install.sh` merges it into `~/.claude/settings.json`, where its keys win and every key the app writes, such as permissions, theme, and voice, stays as it is. A hook is changed here and installed by rerunning `install.sh`.
 
 `install.sh` uses Bash for links and backups and requires `jq` to update JSON. It updates the status-line command while preserving the other runtime settings.
 

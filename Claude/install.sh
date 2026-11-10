@@ -13,8 +13,8 @@ if [ -f "$settings" ]; then
 else
     echo '{}' > "$backup/settings.json"
 fi
-jq '.statusLine = {type: "command", command: "bash \"$HOME/.claude/statusline.sh\""}' \
-    "$backup/settings.json" > "$backup/settings.new.json"
+# The keys in settings.base.json are mine and win; the app keeps every other key.
+jq -s '.[0] * .[1]' "$backup/settings.json" settings.base.json > "$backup/settings.new.json"
 
 # Preserve each old file or folder, then link its versioned source.
 for name in CLAUDE.md rules hooks statusline.sh; do
