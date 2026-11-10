@@ -15,6 +15,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/hooks/writing-check.py\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "statusLine": {

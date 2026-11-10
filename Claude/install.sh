@@ -17,7 +17,7 @@ jq '.statusLine = {type: "command", command: "bash \"$HOME/.claude/statusline.sh
     "$backup/settings.json" > "$backup/settings.new.json"
 
 # Preserve each old file or folder, then link its versioned source.
-for name in CLAUDE.md rules statusline.sh; do
+for name in CLAUDE.md rules hooks statusline.sh; do
     target="$HOME/.claude/$name"
     if [ -L "$target" ] && [ "$(readlink "$target")" = "$source_dir/$name" ]; then
         continue
