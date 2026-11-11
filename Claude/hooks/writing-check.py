@@ -3,14 +3,30 @@
 
 Claude Code and Codex call it as a PostToolUse hook with JSON on stdin; the OpenCode plugin
 sends it the same JSON. Claude's Write and Edit name the file in tool_input.file_path;
-Codex's apply_patch names each file in its patch text, in tool_input.command.
+Codex's apply_patch names each file in its patch text, in tool_input.command. A shell command
+(tool Bash) names no file, so after one the script takes the .tex files under the working
+folder that changed in the last few seconds.
 """
-import json, re, sys
+import json, os, re, sys, time
+
+RECENT = 10  # seconds: a .tex file changed this recently was written by the shell command
+DEPTH = 3    # folders below the working folder to look in
 
 data = json.load(sys.stdin)
 tool_input = data.get("tool_input") or {}
 paths = [tool_input["file_path"]] if tool_input.get("file_path") else []
 paths += re.findall(r"^\*\*\* (?:Add|Update) File: (.+)$", tool_input.get("command") or "", re.M)
+if data.get("tool_name") == "Bash":
+    root = data.get("cwd") or os.getcwd()
+    now = time.time()
+    for folder, dirs, files in os.walk(root):
+        if folder[len(root):].count(os.sep) >= DEPTH:
+            dirs[:] = []
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "build"]
+        for f in files:
+            p = os.path.join(folder, f)
+            if f.endswith(".tex") and now - os.path.getmtime(p) < RECENT:
+                paths.append(p)
 paths = [p.strip() for p in paths if p.strip().endswith(".tex")]
 if not paths:
     sys.exit(0)
