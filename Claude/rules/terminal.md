@@ -27,3 +27,9 @@
 - Confirm the host from the prompt first. When you aren’t showing me something, check a remote machine with `ssh host '…'`.
 - `clear` is its own step, followed by the command, so I can see what you type.
 - Bash runs ble.sh in vi mode. Empty the buffer with `Escape`, then `dd`, then check it’s empty before typing `i`. `C-c` at a prompt only switches to normal mode. End every bash command with `C-j`, because Return doesn’t run a multi-line one.
+
+## Questions in the pane
+
+- When we work in a split, questions and their context go only in the pane beside the Claude pane, found from my own pane id. Chat holds one line saying the pane is ready.
+- A screen holds at most five lines of reading, numbered 1 to 5. Answer fields carry no numbers.
+- Questions come as a form (`tg-pane form` from tg-mail): each field holds my proposal, you change only what you disagree with, and one Enter sends the whole screen. I act on every answer at once, then the next screen replaces it.
