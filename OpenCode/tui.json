@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "cursor": {
+    "style": "underline"
+  },
+  "keybinds": {
+    "which_key_toggle": "<leader>k",
+    "display_thinking": "<leader>d",
+    "messages_first": "ctrl+g",
+    "messages_last": "ctrl+alt+g",
+    "messages_line_up": "ctrl+alt+y,alt+k,alt+pageup",
+    "messages_line_down": "ctrl+alt+e,alt+j,alt+pagedown"
+  }
+}
