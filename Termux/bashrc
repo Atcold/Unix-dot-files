@@ -1,0 +1,20 @@
+# Termux-only settings; the shared ones are in Bash/bashrc, loaded at the end
+
+# Non-interactive shells (scp, `ssh host command`) stop here
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# Completion ###################################################################
+if [ -r $PREFIX/share/bash-completion/bash_completion ]; then
+    source $PREFIX/share/bash-completion/bash_completion
+fi
+
+# Prompt #######################################################################
+# Pretty name and user for the prompt in Bash/bashrc, if set (Android has no hostname,
+# and Termux's user is the app's account, such as u0_a1)
+name=$(sed -n 's/^PRETTY_HOSTNAME=//p' $PREFIX/etc/machine-info 2>/dev/null | tr -d '"')
+user=$(sed -n 's/^PRETTY_USERNAME=//p' $PREFIX/etc/machine-info 2>/dev/null | tr -d '"')
+
+source "$HOME/.settings/Bash/bashrc"

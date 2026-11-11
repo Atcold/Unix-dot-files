@@ -1,0 +1,4 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Run by Termux:Boot when the phone starts: keep the processor awake, start the SSH server
+termux-wake-lock
+sshd
