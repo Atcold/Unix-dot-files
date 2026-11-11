@@ -1,0 +1,7 @@
+# macOS-only ssh options, kept out of ssh_config so Termux's OpenSSH parses the
+# shared file at all. Included through ~/.ssh/config.local, which the Macs link to
+# this file and Termux keeps as its own real file (there it holds User atcold for
+# alfspark: Termux logs in as u0_a1, which names no account on the Spark).
+Host github.com
+  AddKeysToAgent yes
+  UseKeychain yes

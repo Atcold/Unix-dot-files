@@ -1,7 +1,16 @@
+# macOS-only ssh options, kept out of ssh_config so Termux's OpenSSH parses the
+# shared file at all. The Include must sit above every Host line: ssh parses an
+# included file in the context where the Include sits, and ignores Host lines of
+# its own when the Include falls inside some Host block
+Include ~/.ssh/config.local
+
+# UseKeychain and AddKeysToAgent are macOS ssh options: Termux's OpenSSH rejects
+# them at parse time, even under a Match it wouldn't apply, so they live in
+# ssh_config.local, included above and linked only on the Macs, as tmux.conf
+# sources its mac.conf only on Darwin
 Host github.com
-  AddKeysToAgent yes
-  UseKeychain yes
   IdentityFile ~/.ssh/id_ed25519
+
 Host cims
     HostName access.cims.nyu.edu
     Port 22
@@ -26,3 +35,5 @@ Host localhost
 
 Host alfdroid
     Port 8022
+
+Include ~/.ssh/config.local
