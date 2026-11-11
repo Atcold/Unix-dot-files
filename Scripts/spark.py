@@ -15,18 +15,21 @@ works outside the LAN too. The machine itself is reached over the tailnet.
   spark restart         off, then on --wait
   spark models          the model store on the Spark: org/name, size, what is served
   spark serving         what runs on the Spark: state, uptime, image, forwarded port
-  spark serve           serve a model: start it, open its tunnel, wait for its API   [<model> [server]]
-  spark unserve         stop a served model, close its tunnel                        [<model> [server]]
-  spark setup           names in ~/.config/spark/config.toml, login in the Keychain
+  spark serve           serve a model: start it, open its tunnel, wait for its API   [<model> [server] | tunnel]
+  spark unserve         stop a served model, close its tunnel                        [<model> [server] | tunnel]
+  spark setup           names in ~/.config/spark/config.toml, login in the Keychain or a private file
 """
 # The block above `"""` is inline script metadata (PEP 723): `uv run --script`
 # reads it and runs the file in a cached environment with those dependencies.
 import asyncio
+import getpass
 import json
 import os
 import re
+import signal
 import textwrap
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -36,6 +39,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG = Path.home() / ".config/spark/config.toml"
+# Off macOS there is no Keychain to hand the login to, so the TP-Link pair lives in
+# a sibling file of its own, mode 600, kept out of config.toml which stays shareable
+CREDENTIALS = CONFIG.with_name("credentials.toml")
 # Fallbacks for a missing key: config.toml is the record of everything configurable.
 # model names the default model; [models] maps each model to ["server", local, remote],
 # or a list of those triples when one model is served several ways. The container name
@@ -66,6 +72,36 @@ def cyan(s): return c(s, "1", "36")
 def accent(s): return c(s, "1", "35")
 def ok(msg): print(green("✓ ") + msg)
 def err(msg): sys.exit(red("✗ ") + msg)
+
+
+def width(s):
+    # printed characters, not bytes: a coloured line carries many more bytes than
+    # it shows, and padding or wrapping counted on those wrote past the pane edge
+    return len(re.sub(r"\x1b\[[0-9;]*m", "", s))
+
+
+def wrap(s, cols, initial_indent="", subsequent_indent=""):
+    # textwrap.fill measures bytes too, which wraps a coloured line early: place
+    # the words by hand and measure them as printed. Every colour helper closes
+    # what it opens, so a line break between words never splits a style
+    lines, cur, indent = [], "", initial_indent
+    for word in s.split(" "):
+        if cur and width(indent + cur + " " + word) > cols:
+            lines.append(indent + cur)
+            indent = subsequent_indent
+            cur = word
+        else:
+            cur = f"{cur} {word}" if cur else word
+    lines.append(indent + cur)
+    return "\n".join(lines)
+
+
+def short(p):
+    # Paths print as ~/... below the home: Termux spells its home
+    # /data/data/com.termux/files/home, which buries the part that matters
+    home = str(Path.home())
+    s = str(p)
+    return "~" + s[len(home):] if s.startswith(home + os.sep) else s
 
 
 def config():
@@ -100,9 +136,22 @@ def keychain_login(service):
     return email, secret.stdout.strip()
 
 
+def login(cfg):
+    """The TP-Link email and password that `spark setup` stored on this machine."""
+    if sys.platform == "darwin":
+        return keychain_login(cfg["keychain"])
+    if not CREDENTIALS.exists():
+        err(f"No {bold(short(CREDENTIALS))}: run {cyan('spark setup')} first.")
+    creds = tomllib.loads(CREDENTIALS.read_text())
+    try:
+        return creds["email"], creds["password"]
+    except KeyError:
+        err(f"{bold(short(CREDENTIALS))} has no email or password: run {cyan('spark setup')} again.")
+
+
 async def find_plug(cfg):
     from tplinkcloud import TPLinkDeviceManager
-    email, password = keychain_login(cfg["keychain"])
+    email, password = login(cfg)
     manager = TPLinkDeviceManager(email, password,
                                   mfa_callback=lambda: input("TP-Link code: "))
     await manager.async_init()
@@ -118,11 +167,20 @@ async def watts(plug):
 
 
 def tailnet(host):
-    """The status column of `tailscale status` for host: '-', 'active; direct …', 'offline, …'."""
+    """The status column of `tailscale status` for host: '-', 'active; direct …', 'offline, …'.
+
+    On a device without the CLI (Termux, where Tailscale is an Android app rather
+    than a command) the same question goes to the network stack itself: whether a
+    route to the machine's ssh port exists from here. Auth is a different question,
+    for the next line to answer."""
     try:
         out = subprocess.run(["tailscale", "status"], capture_output=True, text=True).stdout
     except FileNotFoundError:
-        return "tailscale is not on the PATH"
+        try:
+            socket.create_connection((host, 22), timeout=3).close()
+            return "active; port 22 answers"
+        except OSError:
+            return "offline"
     for line in out.splitlines():
         fields = line.split()  # address, name, user, OS, status…
         if len(fields) > 4 and fields[1] == host:
@@ -136,9 +194,7 @@ def ssh_up(host):
                           capture_output=True).returncode == 0
 
 
-def tunnel(port):
-    """('listen-port', 'target') of the ssh -L tunnel on the port; None if nobody listens,
-    a name if something other than ssh holds the port."""
+def tunnel_lsof(port):
     # -t: PIDs only; then ps gives the defining command line, as shown in the lesson
     r = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
                        capture_output=True, text=True)
@@ -151,11 +207,88 @@ def tunnel(port):
     return cmd[cmd.index("-L") + 1], cmd[-1]
 
 
-def mac_name():
-    # Each Mac signs its own listener: the name comes from the machine, never the config,
+def ssh_tunnel_pid(port):
+    """(pid, argv) of this machine's spark-style ssh -fN -L tunnel on port, found among
+    this uid's processes. Android denies an app the kernel's socket tables (lsof shows
+    no listeners, /proc/net reads empty), so the command line is the record."""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = [c.decode() for c in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0") if c]
+        except OSError:
+            continue
+        if (len(cmd) > 3 and cmd[0].split("/")[-1] == "ssh" and "-L" in cmd
+                and cmd[cmd.index("-L") + 1].startswith(("127.0.0.1:", "localhost:"))
+                and f":{port}:" in cmd[cmd.index("-L") + 1]):
+            return pid, cmd
+    return None
+
+
+def tunnel_proc(port):
+    t = ssh_tunnel_pid(port)
+    if t:
+        cmd = t[1]
+        return cmd[cmd.index("-L") + 1], cmd[-1]
+    # No ssh of ours on the port: the bind is the only probe the sandbox leaves.
+    # A collision says someone else holds it; whose is not readable from an app.
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("127.0.0.1", port))
+        return None
+    except OSError:
+        return "unknown"
+    finally:
+        probe.close()
+
+
+def close_tunnel(port):
+    """Terminate this machine's tunnel on the port — only ever the ssh spark opens,
+    never another holder of the port. True when one was alive."""
+    if sys.platform == "darwin":
+        r = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
+                           capture_output=True, text=True)
+        for pid in r.stdout.split():
+            cmd = subprocess.run(["ps", "-o", "command=", "-p", pid],
+                                 capture_output=True, text=True).stdout.split()
+            if cmd and cmd[0].split("/")[-1] == "ssh" and "-L" in cmd:
+                os.kill(int(pid), signal.SIGTERM)
+                return True
+        return False
+    t = ssh_tunnel_pid(port)
+    if not t:
+        return False
+    os.kill(int(t[0]), signal.SIGTERM)
+    return True
+
+
+def tunnel(port):
+    """('listen-port', 'target') of the ssh -L tunnel on the port; None if nobody listens,
+    a name if something other than ssh holds the port."""
+    return tunnel_lsof(port) if sys.platform == "darwin" else tunnel_proc(port)
+
+
+def device_name():
+    # Each machine signs its own listener: the name comes from the machine, never the config,
     # which is shared through Dropbox
-    return subprocess.run(["scutil", "--get", "LocalHostName"],
-                          capture_output=True, text=True).stdout.strip() or "Mac"
+    if sys.platform == "darwin":
+        return subprocess.run(["scutil", "--get", "LocalHostName"],
+                              capture_output=True, text=True).stdout.strip() or "Mac"
+    if os.environ.get("TERMUX_VERSION"):  # Termux's hostname is Android's "localhost"
+        # The name the person chose, from the same file the Termux bashrc takes
+        # the prompt's $name from; getprop's model (ONEPLUS A6003) is a factory
+        # code nobody picked, so it only speaks when machine-info is missing
+        info = Path(os.environ.get("PREFIX", "")) / "etc/machine-info"
+        for line in info.read_text().splitlines() if info.exists() else []:
+            if line.startswith("PRETTY_HOSTNAME="):
+                chosen = line.partition("=")[2].strip('"')
+                if chosen:
+                    return chosen
+        model = subprocess.run(["getprop", "ro.product.model"],
+                               capture_output=True, text=True).stdout.strip()
+        if model:
+            return model
+    return socket.gethostname() or "device"
 
 
 def model_ready(port):
@@ -179,28 +312,46 @@ def uptime_text(started):
     return f"{d} d {h} h {m} m" if d else f"{h} h {m} m"
 
 
+def package_install(pkgs):
+    """The platform's package manager command for pkgs, or None if this machine has none.
+
+    Termux and Debian both carry apt, so the order reads outward from the guest:
+    a Debian root filesystem first, then Android's Termux wrapper, then brew."""
+    if os.path.exists("/etc/debian_version"):  # a Debian guest, root or not: apt is the way
+        cmd = ["apt-get", "install", "-y", *pkgs]
+        return (["sudo"] + cmd if os.geteuid() else cmd), None
+    if os.environ.get("TERMUX_VERSION") and shutil.which("pkg"):
+        return ["pkg", "install", *pkgs], None  # pkg wraps apt and stays non-interactive
+    if sys.platform == "darwin" and shutil.which("brew"):
+        # HOMEBREW_NO_ASK drops brew 7's ask-mode [y/n] gate: the decision to install
+        # is made here, and the prompt would hang the chart when gnuplot arrives as a
+        # surprise with dependencies (it pulls qt)
+        return ["brew", "install", *pkgs], {**os.environ, "HOMEBREW_NO_ASK": "1"}
+    return None
+
+
 def gnuplot():
-    """The gnuplot binary's path, installed through brew on first use if missing.
+    """The gnuplot binary's path, installed through this machine's package manager if missing.
 
     The wattage chart is the only feature that needs it, so the one-time install
-    happens at use rather than in Mac/install.sh, where a new Mac would miss it and
-    spark wattage would die in a traceback."""
+    happens at use rather than in a setup script, where a new machine would miss it
+    and spark wattage would die in a traceback."""
     exe = shutil.which("gnuplot")
     if exe:
         return exe
-    if not shutil.which("brew"):
-        err("gnuplot is missing and there is no brew to install it: install Homebrew first.")
-    print(dim("gnuplot missing: installing it with brew, one time…"))
-    # brew's own progress stays visible: the user watches the one-time install.
-    # HOMEBREW_NO_ASK turns off brew 7's ask-mode [y/n] gate: the decision to
-    # install was made above, and the prompt would hang the chart when gnuplot
-    # arrives as a surprise with dependencies (it pulls qt)
-    brew = {**os.environ, "HOMEBREW_NO_ASK": "1"}
-    if subprocess.run(["brew", "install", "gnuplot"], env=brew).returncode != 0:
-        err("brew could not install gnuplot: run `brew install gnuplot` and check its output")
+    plan = package_install(["gnuplot"])
+    if plan is None:
+        err("gnuplot is missing and this machine has no package manager spark knows "
+            "(brew, pkg or apt-get): install gnuplot and put it on the PATH")
+    cmd, env = plan
+    print(dim(f"gnuplot missing: running {' '.join(cmd)}, one time…"))
+    # the manager's own progress stays visible: the user watches the one-time install
+    if subprocess.run(cmd, env=env).returncode != 0:
+        err(f"{bold(cmd[0])} could not install gnuplot: run {cyan(' '.join(cmd))} "
+            f"and check its output")
     exe = shutil.which("gnuplot")
-    if exe is None:  # brew succeeded but the binary is still off PATH
-        err("gnuplot installed but is not on PATH: check `brew link gnuplot`")
+    if exe is None:  # the manager succeeded but the binary is still off PATH
+        err("gnuplot installed but is not on PATH: check how this machine links it")
     return exe
 
 
@@ -275,7 +426,7 @@ async def status(cfg):
     else:
         state = yellow("starting or stopping")
     path = tailnet(cfg["host"])
-    path = (green(path) if "direct" in path else yellow(path) if "relay" in path
+    path = (green(path) if "direct" in path or "answers" in path else yellow(path) if "relay" in path
             else red(path) if "offline" in path or "not on" in path else dim(path))
     print(f"{dim('plug')}    {bold(cfg['plug'])}: {green('on') if on else red('off')}, "
           f"{accent(f'{w:.1f} W')} -> {bold(cfg['host'])} {state}")
@@ -295,25 +446,35 @@ async def status(cfg):
                             f"docker inspect -f '{{{{.State.Status}}}} {{{{.State.StartedAt}}}}' "
                             f"{name}"],
                            capture_output=True, text=True)
-        state = "" if r.returncode else r.stdout.strip().partition(" ")[0]
-        if state != "running":
-            for label in ("service", "tunnel", "api"):
-                print(f"{dim(label.ljust(7))} {dim('none')}")
-            return
-        started = r.stdout.strip().partition(" ")[2]
-        print(f"{dim('service')} {bold(server)} {dim(f'(model {model})')}: "
-              f"{green(f'running {uptime_text(started)}')}")
+        if r.returncode == 255:
+            # ssh itself failed (no key, no route): that fact belongs to this line
+            # alone, the tunnel and the API are local facts this device can answer
+            # regardless, so they still get their own lines below
+            print(f"{dim('service')} {bold(server)} {dim(f'(model {model})')}: "
+                  f"{red('no ssh access to ' + cfg['host'])}")
+        else:
+            state = "" if r.returncode else r.stdout.strip().partition(" ")[0]
+            if state != "running":
+                print(f"{dim('service')} {bold(server)} {dim(f'(model {model})')}: "
+                      f"{yellow(state or 'container not found')}")
+            else:
+                started = r.stdout.strip().partition(" ")[2]
+                print(f"{dim('service')} {bold(server)} {dim(f'(model {model})')}: "
+                      f"{green(f'running {uptime_text(started)}')}")
         # Tunnel and API are two facts on two lines: the pipe, then what answers at its end
         t = tunnel(local)
-        pair = f"{bold(mac_name())}:{accent(local)} {dim('→')} {bold(cfg['host'])}:{accent(remote)}"
+        pair = f"{bold(device_name())}:{accent(local)} {dim('→')} {bold(cfg['host'])}:{accent(remote)}"
         if isinstance(t, tuple):
             print(f"{dim('tunnel')}  {pair} {green('open')}")
         elif isinstance(t, str):
             print(f"{dim('tunnel')}  {pair} {red(f'held by {t}, not ssh')}")
         else:
             print(f"{dim('tunnel')}  {pair} {red('closed')}")
-        api = green("ready") if model_ready(local) else red("no answer")
-        print(f"{dim('api')}     {bold(mac_name())}:{accent(local)}: {api}")
+        # With no pipe open there is nothing to ask at the far end: none, not a
+        # "no answer" that blames a server nobody reached
+        api = dim("none") if t is None else (green("ready") if model_ready(local)
+                                             else red("no answer"))
+        print(f"{dim('api')}     {bold(device_name())}:{accent(local)}: {api}")
 
 
 async def plug_state(cfg):
@@ -451,6 +612,12 @@ def serving(cfg):
 
 
 def serve(cfg, model=None, server=None):
+    # `spark serve tunnel`: join a shared service rather than run one. Once the
+    # Spark serves, any machine just wants its own pipe open, and bringing a
+    # service down or up stays the call of whoever keeps it alive.
+    tunnel_only = model == "tunnel"
+    if tunnel_only:
+        model, server = None, None
     p = pick(cfg, model, server)
     if p is None:
         err(unknown_model(cfg, model or cfg["model"], server))
@@ -459,7 +626,13 @@ def serve(cfg, model=None, server=None):
     # block starts: everything below either prints lines or waits, never asks
     sys.stdout.write("\033[?25l")
     try:
-        if not ssh_up(cfg["host"]):
+        if tunnel_only:
+            # joining a service, not making one: ssh answering is a precondition here,
+            # not something to wait out, and a powered-off Spark is the server's problem
+            if not ssh_up(cfg["host"]):
+                err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark serve')} "
+                    f"brings the service up first")
+        elif not ssh_up(cfg["host"]):
             # Ask the plug before blaming the machine: off at the plug is the common
             # case, and only a machine already drawing power deserves the wait
             _, on, w = asyncio.run(plug_state(cfg))
@@ -492,6 +665,10 @@ def serve(cfg, model=None, server=None):
             # attaching to a boot already in flight: its start lines are not this
             # command's to claim, so no banner is looked for and only readiness is waited
             run_since = None
+        elif tunnel_only:
+            # a service that exists but stands stopped is the server owner's call
+            err(f"{bold(name)} is stopped on {cfg['host']}: {cyan('spark serve')} starts the "
+                f"service; {cyan('spark serve tunnel')} only opens this machine's pipe")
         else:
             # the run's own window in the log, told by the clock the daemon itself
             # stamps. A reused container holds every earlier start, and reading the
@@ -520,6 +697,13 @@ def serve(cfg, model=None, server=None):
         if server not in STAGE_PARSER:  # only a server spark can read is waited for
             ok(f"{bold(name)} up; {bold(server)} has no health check spark knows, "
                f"{cyan('spark serving')} to see state")
+            return
+        # Nothing to watch when the far end already answers: an attach to a model
+        # that is serving prints its line and leaves. The frame is for a boot in
+        # flight, and running it over a full log replays a check per phase of a
+        # start this command never began (what spark serve showed on the phone)
+        if model_ready(local):
+            ok(f"{bold(name)} serving on {bold(f':{local}')}, {green('api ready')}")
             return
         # One line per phase, kept on screen as it completes: the server's own parser turns
         # the log into a percentage and a stage word, and a new phase starts a fresh line.
@@ -550,11 +734,6 @@ def serve(cfg, model=None, server=None):
                 stop_fetch.wait(5)
 
         threading.Thread(target=fetch_loop, daemon=True).start()
-
-        def width(s):
-            # printed characters, not bytes: a coloured line carries many more bytes than
-            # it shows, and padding or wrapping counted on those wrote past the pane edge
-            return len(re.sub(r"\x1b\[[0-9;]*m", "", s))
 
         def pad_to(s, w):
             # ljust would count the escape bytes and add nothing to a coloured line,
@@ -644,10 +823,21 @@ def serve(cfg, model=None, server=None):
 
 
 def unserve(cfg, model=None, server=None):
+    # `spark unserve tunnel`: close just this machine's pipe. The service belongs to
+    # whoever keeps it alive, so a joining machine never takes it down.
+    tunnel_only = model == "tunnel"
+    if tunnel_only:
+        model, server = None, None
     p = pick(cfg, model, server)
     if p is None:
         err(unknown_model(cfg, model or cfg["model"], server))
     model, server, local, remote, name = p
+    if tunnel_only:
+        if close_tunnel(local):
+            ok(f"tunnel :{local} {red('closed')}")
+        else:
+            ok(f"tunnel :{local} already closed")
+        return
     if not ssh_up(cfg["host"]):
         ok(f"{bold(cfg['host'])} is already down")
         return
@@ -667,9 +857,7 @@ def unserve(cfg, model=None, server=None):
     if isinstance(held, tuple):
         spec, target = held
         if spec == f"127.0.0.1:{local}:127.0.0.1:{remote}" and target == cfg["host"]:
-            pid = subprocess.run(["lsof", "-nP", "-t", f"-iTCP:{local}", "-sTCP:LISTEN"],
-                                 capture_output=True, text=True).stdout.split()[0]
-            subprocess.run(["kill", pid])
+            close_tunnel(local)  # the pair matched ours, so this is ours to close
             ok(f"tunnel :{local} {red('closed')}")
         else:
             ok(f"tunnel :{local} left open: not this service's ({dim(f'-L {spec} → {target}')})")
@@ -825,12 +1013,23 @@ def setup(cfg):
     plug = input(f"plug name [{cfg['plug']}]: ") or cfg["plug"]
     host = input(f"tailnet host [{cfg['host']}]: ") or cfg["host"]
     email = input("TP-Link email: ")
-    # -U replaces an existing item; a final -w with no value makes `security` prompt for the password
-    stored = subprocess.run(["security", "add-generic-password", "-U", "-s", cfg["keychain"],
-                             "-a", email, "-w"])
-    if stored.returncode != 0:
-        err(f"Keychain item {bold(cfg['keychain'])} not updated; nothing written.")
-    ok(f"TP-Link login in the Keychain, item {bold(cfg['keychain'])}")
+    if sys.platform == "darwin":
+        # -U replaces an existing item; a final -w with no value makes `security` prompt for the password
+        stored = subprocess.run(["security", "add-generic-password", "-U", "-s", cfg["keychain"],
+                                 "-a", email, "-w"])
+        if stored.returncode != 0:
+            err(f"Keychain item {bold(cfg['keychain'])} not updated; nothing written.")
+        ok(f"TP-Link login in the Keychain, item {bold(cfg['keychain'])}")
+    else:
+        password = getpass.getpass("TP-Link password: ")
+        if password != getpass.getpass("TP-Link password again: "):
+            err("The two passwords differ; nothing written.")
+        # json.dumps escapes as TOML's own basic strings do, so any symbol survives
+        CREDENTIALS.parent.mkdir(parents=True, exist_ok=True)
+        CREDENTIALS.write_text(f'email = {json.dumps(email)}\n'
+                               f'password = {json.dumps(password)}\n')
+        os.chmod(CREDENTIALS, 0o600)  # the file holds a cloud login: owner only
+        ok(f"TP-Link login in {bold(short(CREDENTIALS))}, mode {bold('600')}")
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
     # The file holds the whole picture: every setting, plus every model's serving rows
     rows = "\n".join(f'"{m}" = {json.dumps(cfg["models"][m])}' for m in cfg["models"])
@@ -839,7 +1038,7 @@ def setup(cfg):
                       f'# model = [server, local, remote]: the Mac listens on local, the '
                       f'Spark serves on remote; the container name is derived from the pair\n'
                       f'{rows}\n')
-    ok(f"wrote {bold(str(CONFIG))}")
+    ok(f"wrote {bold(short(CONFIG))}")
 
 
 # command: (what it does, [(option, what it does)]), as tg-mail's gmail lists them
@@ -852,13 +1051,16 @@ COMMANDS = {
     "restart": ("off, then on --wait.", []),
     "models": ("The model store on the Spark: org/name, size, last access, and what is served.", []),
     "serving": ("What runs on the Spark: state, uptime, image, forwarded port.", []),
-    "serve": ("Serve a model: start its server, open its tunnel, wait for its API.", []),
-    "unserve": ("Stop a served model, close its tunnel.", []),
+    "serve": ("Serve a model: start its server, open its tunnel, wait for its API. "
+              "With tunnel, open just this machine's pipe.", []),
+    "unserve": ("Stop a served model, close its tunnel. With tunnel, close just "
+                "this machine's pipe and leave the service running.", []),
     "setup": ("Once per machine: the plug, the machine, and your TP-Link login.", []),
 }
 
 # Positional slots shown in the Usage line, in order
-USAGE = {"serving": "", "serve": "[<model> [server]]", "unserve": "[<model> [server]]"}
+USAGE = {"serving": "", "serve": "[<model> [server] | tunnel]",
+         "unserve": "[<model> [server] | tunnel]"}
 
 
 # What `spark <command> --help` adds below the one-line summary
@@ -868,9 +1070,19 @@ DETAILS = {
         f"  {cyan('plug name    ')}  the plug's name in the Kasa app {dim('(Enter:')} {accent('AlfSPARK')}{dim(')')}",
         f"  {cyan('tailnet host ')}  the machine's name on the tailnet {dim('(Enter:')} {accent('alfspark')}{dim(')')}",
         f"  {cyan('TP-Link email')}  the Kasa app's account",
-        f"  {cyan('password     ')}  asked by macOS's {bold('security')}, twice",
-        f"The names go to {bold('~/.config/spark/config.toml')}, the login to the Keychain",
-        f"(item {bold('tplink-cloud')}). {dim('^C at any question writes nothing.')}",
+        f"  {cyan('password     ')}  "
+        + (f"asked by macOS's {bold('security')}, twice" if sys.platform == "darwin"
+           else "asked twice here, hidden, and confirmed"),
+        f"The names go to {bold('~/.config/spark/config.toml')}, the login to "
+        + (f"the Keychain (item {bold('tplink-cloud')})" if sys.platform == "darwin"
+           else f"{bold('~/.config/spark/credentials.toml')} (mode {bold('600')})")
+        + f". {dim('^C at any question writes nothing.')}",
+    ],
+    "serve": [
+        f"The service is shared: {bold('tunnel')} opens only this machine's pipe to a",
+        "model already serving, no power and no container start, for any machine",
+        f"that just wants to reach the Spark. {cyan('spark unserve tunnel')} closes",
+        "the pipe and leaves the service to whoever keeps it alive.",
     ],
 }
 
@@ -890,7 +1102,16 @@ def usage(command=""):
             for flag, does in options:
                 print(f"  {cyan(flag.ljust(width))}{does}")
         if command in DETAILS:
-            print("\n" + "\n".join("  " + line for line in DETAILS[command]))
+            cols = min(80, shutil.get_terminal_size((80, 20)).columns)
+            print()
+            for line in DETAILS[command]:
+                # item lines hang their text under the description column, prose
+                # keeps a plain left margin; the margin rides on initial_indent
+                # because the word split would drop it from the text itself
+                if line.startswith("  "):
+                    print(wrap(line, cols, "  ", " " * 17))
+                else:
+                    print(wrap(line, cols, "  ", "  "))
     else:
         print("\n" + accent("spark") + dim(" — power a machine on a Kasa smart plug, from anywhere"))
         print(dim("The plug through TP-Link's cloud, the machine over the tailnet."))
