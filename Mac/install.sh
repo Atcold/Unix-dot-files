@@ -1,7 +1,7 @@
 echo 'Installing essential command line tools'
 
 brew install bash git coreutils pdfgrep bash-completion@2 rename htop wget miniconda ranger tree fzf rclone gh eza uv pipx mpv opencode
-brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avidemux notunes
+brew install visual-studio-code rectangle keepingyouawake spotify vlc stats avidemux notunes android-platform-tools
 brew install font-caskaydia-cove-nerd-font  # terminal Nerd Font (icon glyphs + ligatures)
 brew install mac-mouse-fix
 pipx install python-kasa  # kasa: Kasa smart plugs over the LAN
