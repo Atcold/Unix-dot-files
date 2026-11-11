@@ -179,8 +179,34 @@ def uptime_text(started):
     return f"{d} d {h} h {m} m" if d else f"{h} h {m} m"
 
 
+def gnuplot():
+    """The gnuplot binary's path, installed through brew on first use if missing.
+
+    The wattage chart is the only feature that needs it, so the one-time install
+    happens at use rather than in Mac/install.sh, where a new Mac would miss it and
+    spark wattage would die in a traceback."""
+    exe = shutil.which("gnuplot")
+    if exe:
+        return exe
+    if not shutil.which("brew"):
+        err("gnuplot is missing and there is no brew to install it: install Homebrew first.")
+    print(dim("gnuplot missing: installing it with brew, one time…"))
+    # brew's own progress stays visible: the user watches the one-time install.
+    # HOMEBREW_NO_ASK turns off brew 7's ask-mode [y/n] gate: the decision to
+    # install was made above, and the prompt would hang the chart when gnuplot
+    # arrives as a surprise with dependencies (it pulls qt)
+    brew = {**os.environ, "HOMEBREW_NO_ASK": "1"}
+    if subprocess.run(["brew", "install", "gnuplot"], env=brew).returncode != 0:
+        err("brew could not install gnuplot: run `brew install gnuplot` and check its output")
+    exe = shutil.which("gnuplot")
+    if exe is None:  # brew succeeded but the binary is still off PATH
+        err("gnuplot installed but is not on PATH: check `brew link gnuplot`")
+    return exe
+
+
 def dumb_plot(rows, title):
     """One gnuplot dumb-terminal render of (epoch, watts) pairs, sized to the screen."""
+    exe = gnuplot()
     cols, _ = shutil.get_terminal_size((80, 20))
     # gnuplot prints time as UTC: shift the epochs by the Mac's own offset, so the
     # axis says wall-clock time, which is what the numbers on a home gadget should be
