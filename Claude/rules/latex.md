@@ -21,8 +21,9 @@ These apply to every LaTeX document I read: lessons, the Altair chapters, notes.
   - Prefer my own books.
   - Internal pointers are `\Cref`.
   - URLs break anywhere: load `xurl` (before `hyperref`), and set the bibliography `\raggedright`, so a long URL never stretches the words before it.
+- **Shared style:** a private document (a report or plan that stays on my machines) loads `alfdoc`, which `~/Library/texmf/tex/latex/alfdoc/` links to `learning-with-claude/style/alfdoc.sty`; it never rebuilds its preamble from scratch. A public repo (`learning-with-claude`, `altair-tn9k`) ships its own style file, so a clone builds alone. A review round marks each edit with `\here[note]`, a numbered hand with a note of about four words; the Boox shows the hands but not PDF comment icons.
 - **Boxes and figures:** a border, no fill; transparent backgrounds (`opacityback=0`), since I read in a dark viewer.
-- **TikZ:** default arrow tips (`->`) and line widths; don't change TikZ defaults unless asked. Labels never touch their arrows: lift them and check the render.
+- **TikZ:** default arrow tips (`->`) and line widths; don't change TikZ defaults unless asked. Labels never touch their arrows: lift them and check the render. Never draw dashed or dotted lines: their high-frequency pattern distracts. A secondary outline or grouping is a thin, solid, semi-transparent line (*e.g.* `draw opacity=.35`).
 - **Worksheets I follow** (lessons, stage chapters):
   - Every step I must do is in the PDF, with real names and exact commands. Write it there first, then point me to it.
   - Setup (installs, `PATH`) lives only in the README; the chapter says in one line that everything is set up.
