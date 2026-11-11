@@ -8,6 +8,8 @@
 - A ‘why’ section carries causes. A design decision is not a cause: label decisions as decisions rather than inflating them into reasons or goals, and leave a thin list thin instead of padding it.
 - State, don’t announce: not ‘the project has two goals’ but the goals themselves. ‘The first’ and ‘the second’ never point forward to items the reader has not met yet; write in the order the reader comes to know things.
 - Keep ‘both X and Y’ grammatically parallel, nouns of one kind; an explanation after the colon lists them in the same order.
+- Write forward, in the order I speak: subject, verb, object. Never put the object or a place first and the verb last (‘the units every row handles’, ‘at the top the client’), and never open with a long noun phrase or apposition that makes the reader wait for the verb. Say it as I would say it aloud: ‘Every row handles sessions and threads.’
+- ‘Read’ means only reading text or files. Never use it figuratively: not ‘read across a row’, ‘reads best’, ‘should read as’, ‘reads the quota’; say look at, sounds, say, or checks.
 - When a sentence needs a coined phrase or dramatic verb to carry it (‘cut that call dead’, ‘bare completion endpoint’), drop the sentence and say plainly what happens.
 - A document is for a future reader: nothing addressed to me, no trace of corrections, no rebuttals of positions only you held.
 - Dates: ISO `YYYY-MM-DD` for frontmatter, log headings, filenames; in prose `Tue 19` or `Tue 19 May`, or `19 May 2026` when the year matters. Months always three letters.
