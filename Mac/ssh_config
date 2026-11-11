@@ -23,3 +23,6 @@ Host mybox
 Host localhost
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
+
+Host alfdroid
+    Port 8022
