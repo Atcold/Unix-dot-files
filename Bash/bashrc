@@ -126,12 +126,12 @@ function parse_git_branch {
 }
 
 # Prompt (before the ble.sh attach, which takes its copy of PS1) ###############
-# The platform file may set $name (e.g. the Mac's computer name)
+# The platform file may set $name (e.g. the Mac's computer name) and $user
 name=${name:-$(hostname -s)}
 
 # After `clear` in tmux, ble.sh can redraw the first line one column over. The leading
 # `\r` returns to column 1; `\[` and `\]` mark it as zero-width for prompt layout.
-export PS1="\[\r\]\[\e[1;35m\]\u\[\e[38;5;255m\]@\[\e[1;34m\]$name \
+export PS1="\[\r\]\[\e[1;35m\]${user:-\\u}\[\e[38;5;255m\]@\[\e[1;34m\]$name \
 \[\e[1;33m\]\w\[\e[0m\] \[\e[2m\]\$(parse_git_branch)\[\e[0m\]\n\[\e[1;32m\]$\[\e[0m\] "
 export PS2="\[\e[1;31m\]>\[\e[0m\] "
 
