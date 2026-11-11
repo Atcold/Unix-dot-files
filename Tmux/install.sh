@@ -20,6 +20,14 @@ if [[ $(uname) == 'Darwin' ]]; then
     ln -sf $(pwd)/battery.sh $HOME/.tmux/battery.sh
 fi
 
+# If under Termux, its status row reads machine-info and the Termux:API battery
+if [[ -n "$TERMUX_VERSION" ]]; then
+    rm -f $HOME/.tmux.termux.conf
+    ln -s $(pwd)/tmux.termux.conf $HOME/.tmux.termux.conf
+    ln -sf $(pwd)/battery.termux.sh $HOME/.tmux/battery.sh
+    chmod +x $(pwd)/battery.termux.sh
+fi
+
 echo 'Done.'
 echo
 echo 'NOTE: a running tmux server caches the old terminfo. To apply the cursor-shape'
