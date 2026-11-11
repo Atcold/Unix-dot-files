@@ -1,7 +1,7 @@
 echo 'Installing essential command line tools'
 
 sudo apt-get update
-sudo apt-get install -y bash-completion git htop wget tree fzf eza bat ranger rclone gh pipx  # Neovim: Nvim/install.sh
+sudo apt-get install -y bash-completion git htop wget tree fzf eza bat ranger rclone gh pipx mpv  # Neovim: Nvim/install.sh
 
 echo 'Done.'
 
