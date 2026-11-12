@@ -16,6 +16,7 @@
 - PDFs:
   - While rebuilding, open the PDF once with `open -a Skim` and let it reload itself.
   - From about midnight, or when I ask, use Preview instead: first close every Preview document, because they all share one name.
+  - Leave a PDF I already have open where it is: closing and reopening it resets Preview's night view to a bright white page.
   - I read it myself. After an edit, give the page and a few words only.
 - PDFs in `~/Dropbox` carry my e-ink annotations:
   - Before overwriting one, compare it with your last copy.
