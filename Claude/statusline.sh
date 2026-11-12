@@ -107,14 +107,15 @@ WEEKLY_TEXT=""
 for window in five_hour seven_day; do
     [ "$window" = five_hour ] && window_seconds=18000 || window_seconds=604800
     # Windows may be absent before the first response or after their reset.
-    # Compare weekly consumption with elapsed time before rounding the display.
+    # The weekly window shows from 75% used, or earlier when consumption runs ahead of elapsed time.
+    # Both checks use the unrounded figure.
     values=$(echo "$input" | jq -r --arg window "$window" --argjson now "$now_ts" --argjson duration "$window_seconds" '
         .rate_limits[$window]
         | select(type == "object")
         | select((.used_percentage | type) == "number" and (.resets_at | type) == "number")
         | select(.used_percentage >= 0 and .used_percentage <= 100 and .resets_at > $now)
         | [(.used_percentage | round), (.resets_at | floor),
-           (.used_percentage * $duration > ($duration - ([.resets_at - $now, $duration] | min)) * 100)]
+           (.used_percentage >= 75 or .used_percentage * $duration > ($duration - ([.resets_at - $now, $duration] | min)) * 100)]
         | @tsv' 2>/dev/null)
     [ -z "$values" ] && continue
     IFS=$'\t' read -r utilization reset_epoch over_pace <<< "$values"

@@ -12,4 +12,4 @@ Application homes can be shared through Dropbox using symlinks. Each machine kee
 
 The status line reads five-hour and weekly account usage from Claude Code’s [status-line input](https://code.claude.com/docs/en/statusline#rate-limit-usage), including the percentage consumed and reset time. Usage becomes available after the session’s first API response. Colours, quota boxes, the elapsed-time marker, and the local reset time are rendered in Bash from that input.
 
-The weekly block appears beside the five-hour block when the percentage consumed exceeds the elapsed share of the seven-day window. The comparison uses the supplied percentage before rounding the boxes. Its local reset weekday and time distinguish it from the five-hour block, which retains its reset time.
+The weekly block appears beside the five-hour block once 75% is consumed, or earlier when the percentage consumed exceeds the elapsed share of the seven-day window. The comparison uses the supplied percentage before rounding the boxes. Its local reset weekday and time distinguish it from the five-hour block, which retains its reset time.
