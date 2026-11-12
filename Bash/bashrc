@@ -40,10 +40,23 @@ for i in 1 2 3 4 5; do
   alias "t$i"="_t $i"
 done
 
-# Bare `tmux` attaches to (or creates) a session named "Tmux"
+# Bare `tmux` attaches to (or creates) the machine's own session: the display
+# name read from the device (scutil on the Mac, machine-info elsewhere), with the
+# Alf prefix dropped and the rest title-cased. AlfMAC4 opens `Mac4`, AlfDROID opens
+# `Droid`, so the status bar's `#S:#I.#P` signs the machine instead of repeating
+# the word tmux. Capital like the old `Tmux`: a session is shown, never dialled.
 function tmux {
     if [ $# -eq 0 ]; then
-        command tmux new-session -A -s Tmux
+        local name
+        if [[ $(uname) == Darwin ]]; then
+            name=$(scutil --get LocalHostName 2>/dev/null)
+        else
+            name=$(sed -n 's/^PRETTY_HOSTNAME=//p' "${PREFIX:-}/etc/machine-info" 2>/dev/null)
+            [ -z "$name" ] && name=$(hostname)
+        fi
+        name=${name,,}
+        name=${name#alf}
+        command tmux new-session -A -s "${name^}"
     else
         command tmux "$@"
     fi
