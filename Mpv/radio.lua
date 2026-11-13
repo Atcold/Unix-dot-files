@@ -87,7 +87,6 @@ mp.observe_property("audio-bitrate", "number", function(_, bps)
   if started then
     io.write("\27[1A\r\27[K")  -- remove the status line mpv leaves behind at a switch
   else
-    io.write("\27[2J\27[H")  -- the first station starts on a clear screen, under the keys
     say("<  >" .. dim("  station   ·   ") .. "9  0" .. dim("  volume   ·   ") .. "space" .. dim("  pause   ·   ") .. "q" .. dim("  quit"))
     started = true
   end
