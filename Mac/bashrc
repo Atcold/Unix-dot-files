@@ -29,6 +29,22 @@ claude-ssh() {
     claude "$@"
 }
 
+# Pair the phone with this Mac's OpenCode server over Tailscale only
+function opencode-pair {
+    local ip="$(tailscale ip -4)"
+    [[ "$ip" ]] || { echo "tailscale is not up" >&2; return 1; }
+    opencode service set hostname "$ip"  # listen on the tailnet address only
+    opencode service start               # service set stops the server; start applies the new config
+    opencode pair | sed -E "s#(https?://)(127\.0\.0\.1|localhost)#\1$ip#"  # rewrite the link so the phone can reach it
+}
+
+# Undo opencode-pair: bind the server back to localhost, run it while the buddy is idle
+function opencode-unpair {
+    opencode service unset hostname  # the config change stops the server
+    opencode service start           # start it again on localhost only
+    opencode service status          # expect http://127.0.0.1:49374
+}
+
 # Mount CIMS on my Mac
 function MountCims {
     # ssh -L 2222:box795:22 $ACCESS -Nf
