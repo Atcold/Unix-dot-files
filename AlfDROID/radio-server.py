@@ -47,6 +47,8 @@ UA = "AlfDROID-radio/1.0 (Termux)"
 
 # ColorBrewer Set3 in the order radio.lua uses, without the yellow and the grey.
 COLOURS = ["8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5"]
+WHITE_LOGOS = {"venice-classic-radio"}   # white-on-transparent art needs a dark tile
+DARK_INK_LOGOS = {"classic-fm"}          # red-and-black art needs the light tile
 
 # Where to fetch each station's logo from, tried in order: an official brand image
 # (preferably SVG), then the station homepage's og:image, then DuckDuckGo's icon for
@@ -87,6 +89,20 @@ def load_stations():
     for i, st in enumerate(stations):
         st["colour"] = COLOURS[i % len(COLOURS)]
     return stations
+
+
+def fix_mojibake(s):
+    """Undo double-encoded UTF-8: Venice sends StreamTitle as UTF-8 bytes encoded
+    as UTF-8 again, so 'Félicien' arrives as 'FÃ©licien'. Decode once more when the
+    tell-tale 'Ã' shows up and the second decode comes out clean."""
+    if "Ã" in s:
+        try:
+            fixed = s.encode("latin-1", "strict").decode("utf-8", "strict")
+            if "Ã" not in fixed and "\ufffd" not in fixed:
+                return fixed
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return s
 
 
 def encoder():
@@ -180,6 +196,16 @@ class Radio:
         self.titles = {}     # slug -> [title, since], from the icy side readers
         self.meta = {st["slug"]: {"restarts": 0, "started": 0.0} for st in self.stations}
         self.icecast = None
+        self.recent = []    # newest first: {time, station, piece}, the page's played list
+        try:
+            for row in reversed(LOGTSV.read_text().splitlines()[1:]):
+                cols = row.split("\t")
+                if len(cols) >= 4:
+                    self.recent.append({"time": cols[1], "station": cols[2], "piece": cols[3]})
+                if len(self.recent) == 12:
+                    break
+        except FileNotFoundError:
+            pass
         if ENABLED.exists():
             for slug in json.loads(ENABLED.read_text()):
                 self.wanted.add(slug)
@@ -273,7 +299,7 @@ class Radio:
                     st["url"], headers={"User-Agent": UA, "Icy-MetaData": "1"}), timeout=20)
                 interval = int(r.headers.get("icy-metaint", "0") or 0)
                 if not interval:  # no inline chunks; some stations only set icy-title in the header
-                    title = (r.headers.get("icy-title") or "").strip()
+                    title = fix_mojibake((r.headers.get("icy-title") or "").strip())
                     r.close()
                     if title and title != last:
                         last = title
@@ -291,7 +317,7 @@ class Radio:
                         break
                     blob = r.read(first[0] * 16).rstrip(b"\0").decode("utf-8", "replace")
                     m = re.search(r"StreamTitle='([^']*)'", blob)
-                    title = (m.group(1) if m else "").strip()
+                    title = fix_mojibake((m.group(1) if m else "").strip())
                     if title and title != last:
                         last = title
                         self.note_title(slug, title)
@@ -305,13 +331,17 @@ class Radio:
                 self.titles[slug] = [title, time.time()]
 
     def log_line(self, station, title):
-        """Append one row, same columns as radio.lua: date, time, station, piece."""
+        """Append one row, same columns as radio.lua: date, time, station, piece.
+        The in-memory copy feeds the page's played list."""
         LOGTSV.parent.mkdir(parents=True, exist_ok=True)
         new = not LOGTSV.exists()
+        hm = time.strftime("%H:%M")
         with open(LOGTSV, "a") as f:
             if new:
                 f.write("date\ttime\tstation\tpiece\n")
             f.write(time.strftime("%Y-%m-%d\t%H:%M") + "\t" + station + "\t" + title + "\n")
+        self.recent.insert(0, {"time": hm, "station": station, "piece": title})
+        del self.recent[12:]
 
     def log_loop(self):
         """Mirror radio.lua's rule: a piece is logged once it held the mount for 30 s
@@ -388,7 +418,8 @@ class Radio:
                          "title": self.titles.get(slug, [""])[0],
                          "bitrate": info.get("bitrate", ""), "listeners": info.get("listeners", 0),
                          "error": error})
-        return {"pid": os.getpid(), "enc": self.ext.lstrip("."), "stations": rows}
+        return {"pid": os.getpid(), "enc": self.ext.lstrip("."),
+                "recent": self.recent, "stations": rows}
 
     def shutdown(self):
         with self.lock:
@@ -401,25 +432,26 @@ class Radio:
 
 
 def svg_icon():
-    return """<svg width=40 height=40 viewBox="0 0 48 48" fill=none stroke=#8dd3c7
-stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true>
-<rect x=5 y=19 width=38 height=24 rx=3/>
-<line x1=11 y1=26 x2=25 y2=26/><line x1=11 y1=31 x2=25 y2=31/><line x1=11 y1=36 x2=25 y2=36/>
-<circle cx=35 cy=31 r=4.5/><line x1=35 y1=31 x2=37.5 y2=27.5/>
-<line x1=31 y1=19 x2=41 y2=7/><path d="M37 12a8 8 0 0 1 3 4"/><path d="M40 8a12 12 0 0 1 4 6"/>
+    return """<svg width="40" height="40" viewBox="0 0 48 48" fill="none" stroke="#8dd3c7"
+stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="19" width="38" height="24" rx="3"/>
+<line x1="11" y1="26" x2="25" y2="26"/><line x1="11" y1="31" x2="25" y2="31"/><line x1="11" y1="36" x2="25" y2="36"/>
+<circle cx="35" cy="31" r="4.5"/><line x1="35" y1="31" x2="37.5" y2="27.5"/>
+<line x1="31" y1="19" x2="41" y2="7"/><path d="M37 12a8 8 0 0 1 3 4"/><path d="M40 8a12 12 0 0 1 4 6"/>
 </svg>"""
 
 
 CSS = """
 body{background:#000;color:#eaeaea;font-family:"Cascadia Code",ui-monospace,Menlo,monospace;
-margin:24px auto;max-width:640px;padding:0 16px 96px}
+margin:24px auto;max-width:640px;padding:0 16px 130px}
 header{display:flex;align-items:center;gap:12px;margin-bottom:4px}
 h1{font-size:20px;font-weight:600;margin:0;flex:1}
 .bar{display:flex;align-items:center;gap:14px;font-size:13px;color:#9a9a9a;margin-bottom:16px;flex-wrap:wrap}
-.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1c1c1c}
-.row.playing{background:#0d0d0d;border-left:3px solid;padding-left:9px}
+.mrow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid #1c1c1c}
+.mrow.playing{background:#0d0d0d;border-left:3px solid;padding-left:3px}
 img.logo{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#e8e8e8;flex:none;padding:3px;box-sizing:border-box}
 img.raster{background:none;padding:0}
+img.white{background:#101010}
 .tile{width:44px;height:44px;border-radius:8px;background:#0d0d0d;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;border:1px solid}
 .text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -428,33 +460,54 @@ img.raster{background:none;padding:0}
 button{background:none;border:1px solid #3a3a3a;color:#9a9a9a;border-radius:6px;padding:2px 8px;
 font:inherit;font-size:11px;flex:none}
 footer{margin-top:18px;font-size:11px;color:#6f6f6f;overflow-wrap:anywhere}
+h2.pl{font-size:11px;font-weight:400;color:#6f6f6f;margin:8px 0 6px;letter-spacing:.08em}
+.prow{display:flex;gap:10px;padding:5px 0 6px 4px;align-items:baseline}
+.ptime{flex:none;color:#6f6f6f}
+.pgrp{display:flex;gap:10px;align-items:baseline;margin:10px 0 2px;border-bottom:1px solid #232323;padding-bottom:3px}
+.pgrp-name{font-weight:700}
+.pwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pc{font-weight:600;color:#eaeaea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pw{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #player{position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;border-top:1px solid #1c1c1c;
 padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;
 max-width:640px;margin:0 auto;box-sizing:border-box}
-#player button{font-size:17px;padding:6px 12px;border-radius:20px}
+#player button{font-size:17px;padding:6px 12px;border-radius:20px;line-height:0}
 #bar-tgl{border-color:#8dd3c7;color:#8dd3c7}
 #bar-dot{width:12px;height:12px;border-radius:50%;flex:none;background:transparent}
 #bar-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 #bar-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #bar-piece{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #vol{width:88px;flex:none;accent-color:#8dd3c7}
+#mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:4}
+#menu{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;width:min(640px,calc(100% - 24px));
+background:#0a0a0a;border:1px solid #2a2a2a;border-radius:14px;padding:6px 10px;display:none;z-index:5;
+max-height:62vh;overflow-y:auto;box-shadow:0 -6px 24px rgba(0,0,0,.7)}
+#pick{border-color:#3a3a3a;font-size:13px;padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:7px;line-height:0}
+#pick-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
 """
 
-JS = """
-var snd=null, now=null, want=false, titles={}, enabled=[];
+JS = r"""
+var snd=null, now=null, want=false, titles={}, enabled=[], COL={};
+ST.forEach(function(s){COL[s.name]='#'+s.colour});
+var ICONS={play:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><path d='M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z'/></svg>",
+pause:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><rect x='6' y='4' width='4.5' height='16' rx='1.5'/><rect x='13.5' y='4' width='4.5' height='16' rx='1.5'/></svg>"};
 function rep(id){return document.getElementById(id)}
 function st_of(slug){for(var i=0;i<ST.length;i++)if(ST[i].slug===slug)return ST[i];return{}}
+function short(n){return n.replace(/\bRadio\b\s*/,'').trim()||n}
 function copy(u,b,ev){if(ev)ev.stopPropagation();navigator.clipboard.writeText(u).then(function(){
-  b.textContent='copied';setTimeout(function(){b.textContent='copy'},1200)})}
+  b.textContent='copied';setTimeout(function(){b.textContent='copy playlist link'},1200)})}
+function menu(on){rep('mask').style.display=on?'block':'none';rep('menu').style.display=on?'block':'none'}
 function setBar(){
   var st=st_of(now);
   rep('bar-dot').style.background=st.colour?'#'+st.colour:'transparent';
-  rep('bar-name').textContent=st.name||'—';
+  rep('bar-name').textContent=st.name||'nothing playing';
   rep('bar-name').style.color=st.colour?'#'+st.colour:'#9a9a9a';
   rep('bar-piece').textContent=(now&&titles[now])||'';
-  rep('bar-tgl').textContent=want?'■':'▶';
+  rep('bar-tgl').innerHTML=want?ICONS.pause:ICONS.play;
+  rep('pick-name').textContent=now?short(st.name):'radio';
+  rep('pick').style.color=now&&st.colour?'#'+st.colour:'';
   ST.forEach(function(s){var r=rep('row-'+s.slug);
-    if(r){r.classList.toggle('playing',s.slug===now);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
+    if(r){r.classList.toggle('playing',s.slug===now&&want);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
   if(now&&titles[now]&&navigator.mediaSession)
     navigator.mediaSession.metadata=new MediaMetadata({title:titles[now],album:st.name,artist:'AlfDROID radio'});
 }
@@ -465,16 +518,14 @@ function mk(){if(!now)return;var st=st_of(now);
   snd.play().catch(function(){});}
 function playRow(slug,ev){if(ev)ev.stopPropagation();
   if(ev&&(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT'))return;
+  menu(0);
   if(now===slug&&want){want=false;if(snd)snd.pause();fetch('/api/off-all');setBar();
     setTimeout(refresh,400);return}
   now=slug;want=true;
   fetch('/api/select?slug='+slug);setTimeout(refresh,400);
   mk();setBar();}
-function tgl(){if(!now){if(ST.length)playRow(ST[0].slug);return}
+function tgl(){if(!now){menu(1);return}
   want=!want;if(want)mk();else snd.pause();setBar();}
-function step(d){if(!ST.length)return;
-  var i=-1;ST.forEach(function(s,idx){if(s.slug===now)i=idx});
-  playRow(ST[(i+d+ST.length)%ST.length].slug);}
 function refresh(){
   fetch('/api/status').then(function(r){return r.json()}).then(function(s){
     enabled=[];
@@ -482,59 +533,82 @@ function refresh(){
       if(st.enabled){enabled.push(st.slug)}
       if(st.title)titles[st.slug]=st.title;
       var e=rep('st-'+st.slug);if(!e)return;
-      if(st.enabled&&st.live){var t='live \\u00b7 '+st.listeners+' listener'+(st.listeners==1?'':'s');
-        if(st.title)t+=' \\u00b7 '+st.title;
-        e.textContent=t;e.className='st live'}
+      if(st.enabled&&st.live){e.textContent='live';e.className='st live'}
       else if(st.enabled){e.textContent='restarting';e.className='st warn'}
       else{e.textContent='off';e.className='st'}
     });
     if(now&&enabled.indexOf(now)<0){want=false;if(snd)snd.pause()}
+    var el=rep('played');el.innerHTML='';
+    var last=null;
+    (s.recent||[]).forEach(function(r){
+      if(r.station!==last){var h=document.createElement('div');h.className='pgrp';
+        var ht=document.createElement('span');ht.className='ptime';ht.textContent=r.time;
+        var hn=document.createElement('span');hn.className='pgrp-name';hn.textContent=r.station;
+        if(COL[r.station])hn.style.color=COL[r.station];
+        h.appendChild(ht);h.appendChild(hn);el.appendChild(h);last=r.station}
+      var d=document.createElement('div');d.className='prow';
+      var a=document.createElement('span');a.className='ptime';a.textContent=r.time;
+      var wrap=document.createElement('span');wrap.className='pwrap';
+      var p=r.piece,i=p.indexOf(' - ');
+      var c=document.createElement('span');c.className='pc';c.textContent=i<0?p:p.slice(0,i);
+      var w=document.createElement('span');w.className='pw';w.textContent=i<0?'':p.slice(i+3);
+      wrap.appendChild(c);wrap.appendChild(w);
+      d.appendChild(a);d.appendChild(wrap);el.appendChild(d)});
     var d=new Date(),p=rep('svc');
-    p.textContent='service on \\u00b7 '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
+    p.textContent='service on · '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
     setBar();
   }).catch(function(){var p=rep('svc');if(p)p.textContent='service off'})}
 function watch(){if(now&&want&&snd&&snd.paused)mk()}
+window.addEventListener('pageshow',function(e){if(e.persisted)location.reload()});
 setInterval(refresh,3000);setInterval(watch,8000);refresh();
 if(navigator.mediaSession){
   navigator.mediaSession.setActionHandler('play',function(){if(!want)tgl()});
-  navigator.mediaSession.setActionHandler('pause',function(){if(want)tgl()});
-  navigator.mediaSession.setActionHandler('previoustrack',function(){step(-1)});
-  navigator.mediaSession.setActionHandler('nexttrack',function(){step(1)});}
+  navigator.mediaSession.setActionHandler('pause',function(){if(want)tgl()});}
 """
 
 
 def page(radio, host):
-    rows, station_list = [], []
+    menu_rows, station_list = [], []
     for st in radio.stations:
         slug, colour, mount = st["slug"], st["colour"], radio.mount(st)
         url = f"http://{host}:{WEB_PORT}{mount}"
         station_list.append({"slug": slug, "name": st["name"], "url": url, "colour": colour})
         logo = LOGOS / (slug + ".img")
         if logo.exists():
-            # Rasters on these stations carry their own white ground; the light tile
-            # stays only for SVGs, which are often white-on-transparent.
+            # Rasters carry their own ground, white-on-transparent SVGs need a dark
+            # tile; everything else sits on the light tile.
             head = logo.read_bytes()[:4]
-            cls = "logo raster" if head in (b"\x89PNG", b"GIF8", b"\xff\xd8", b"RIFF") else "logo"
+            if slug in DARK_INK_LOGOS:
+                cls = "logo"
+            elif slug in WHITE_LOGOS:
+                cls = "logo white"
+            elif head in (b"\x89PNG", b"GIF8", b"\xff\xd8", b"RIFF"):
+                cls = "logo raster"
+            else:
+                cls = "logo"
             art = f'<img class={cls} src="/logo/{slug}" alt="">'
         else:
             initials = "".join(w[0] for w in st["name"].split()[:2]).upper()
             art = f'<span class=tile style="border-color:#{colour};color:#{colour}">{initials}</span>'
-        rows.append(
-            f'<div class=row id=row-{slug} onclick="playRow(\'{slug}\',event)">{art}'
+        menu_rows.append(
+            f'<div class=mrow id=row-{slug} onclick="playRow(\'{slug}\',event)">{art}'
             f'<div class=text><span class=name style="color:#{colour}">{st["name"]}</span>'
-            f'<span class=st id=st-{slug}>off</span></div>'
-            f'<button onclick="copy(\'{url}\',this,event)">copy</button></div>')
+            f'<span class=st id=st-{slug}>off</span></div></div>')
     return ("<!doctype html><html><head><meta charset=utf-8>"
             '<meta name=viewport content="width=device-width, initial-scale=1">'
             "<title>AlfDROID radio</title><style>" + CSS + "</style></head><body>"
             "<header>" + svg_icon() + "<h1>AlfDROID radio</h1></header>"
             '<div class=bar><span id=svc></span>'
             f'<button onclick="copy(\'http://{host}:{WEB_PORT}/radio.m3u\',this,event)">copy playlist link</button></div>'
-            + "".join(rows)
+            + '<h2 class=pl>queue</h2><div id=played></div>'
+            + '<div id=mask onclick="menu(0)"></div>'
+            + '<div id=menu>' + "".join(menu_rows) + '</div>'
             + '<div id=player>'
-              '<button onclick="step(-1)">⏮</button>'
-              '<button id=bar-tgl onclick="tgl()">▶</button>'
-              '<button onclick="step(1)">⏭</button>'
+              '<button id=pick onclick="menu(1)"><svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">'
+              '<rect x="5" y="19" width="38" height="24" rx="3"/><line x1="31" y1="19" x2="41" y2="7"/>'
+              '<circle cx="35" cy="31" r="4.5"/></svg><span id=pick-name>radio</span></button>'
+              '<button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">'
+              '<path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button>'
               '<span id=bar-dot></span>'
               '<span id=bar-text><span id=bar-name>—</span><span id=bar-piece></span></span>'
               '<input type=range id=vol min=0 max=1 step=0.05 value=1 oninput="if(snd)snd.volume=this.value">'

@@ -120,10 +120,24 @@ local function listen(title)
   timer = mp.add_timeout(30, function() log(station, title) end)
 end
 
+-- Venice double-encodes its StreamTitle (UTF-8 bytes encoded as UTF-8 again),
+-- so accents arrive mangled: undo it by decoding two-byte sequences once more,
+-- only when the tell-tale Ã (0xC3 0x83) appears in the string.
+local function unmangle(s)
+  if not s:find("\195\131", 1, true) then return s end
+  return (s:gsub("[\194\195][\128-\191]", function(b)
+    local c1, c2 = b:byte(1, 2)
+    local cp = (c1 - 192) * 64 + (c2 - 128)
+    if cp >= 128 and cp <= 255 then return string.char(cp) end
+    return b
+  end))
+end
+
 mp.register_event("end-file", function() if timer then timer:kill() end end)
 
 mp.observe_property("metadata/by-key/icy-title", "string", function(_, title)
   if not title or title == "" then return end
+  title = unmangle(title)
   listen(title)
   if pending then table.insert(titles, title) else piece(title) end
 end)
