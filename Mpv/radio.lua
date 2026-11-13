@@ -87,7 +87,7 @@ mp.observe_property("audio-bitrate", "number", function(_, bps)
   if started then
     io.write("\27[1A\r\27[K")  -- remove the status line mpv leaves behind at a switch
   else
-    say("<  >" .. dim("  station   ·   ") .. "9  0" .. dim("  volume   ·   ") .. "space" .. dim("  pause   ·   ") .. "q" .. dim("  quit"))
+    say("<  >" .. dim("  station   ·   ") .. "1-8 a-z" .. dim("  jump   ·   ") .. "9  0" .. dim("  volume   ·   ") .. "c" .. dim("  channels   ·   ") .. "space" .. dim("  pause   ·   ") .. "q" .. dim("  quit"))
     started = true
   end
   for _, line in ipairs(blocky(pending.name)) do say(rgb(pending.colour, line)) end
@@ -121,8 +121,10 @@ end
 
 -- Venice double-encodes its StreamTitle (UTF-8 bytes encoded as UTF-8 again),
 -- so accents arrive mangled: undo it by decoding two-byte sequences once more,
--- only when the tell-tale Ã (0xC3 0x83) appears in the string.
+-- only when the tell-tale Ã (0xC3 0x83) appears in the string. Venice also
+-- trails a {+info: site} advertisement onto some titles: that goes too.
 local function unmangle(s)
+  s = (s:gsub("%s*{%+info:[^}]*}", ""))
   if not s:find("\195\131", 1, true) then return s end
   return (s:gsub("[\194\195][\128-\191]", function(b)
     local c1, c2 = b:byte(1, 2)
@@ -131,6 +133,137 @@ local function unmangle(s)
     return b
   end))
 end
+
+-- c: channels menu. A python probe reads each stream's icy StreamTitle chunk with
+-- all stations sniffed concurrently (~4 s). It previews without switching;
+-- <  > then moves to the station you picked.
+local PY_SNIFF = [[
+import sys, threading, urllib.request, re
+def sniff(i, url, out):
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(url, headers={
+            "User-Agent": "AlfDROID radio", "Icy-MetaData": "1"}), timeout=4)
+        intv = int(r.headers.get("icy-metaint", "0") or 0)
+        title = ""
+        if intv:
+            for _ in range(3):
+                r.read(intv)
+                ln = r.read(1)
+                if not ln:
+                    break
+                blob = r.read(ln[0] * 16).rstrip(b"\0").decode("utf-8", "replace")
+                m = re.search(r"StreamTitle='(.*?)';", blob) or re.search(r"StreamTitle='([^']*)'", blob)
+                if m and m.group(1).strip():
+                    title = m.group(1).strip()
+                    break
+        r.close()
+        if not title:
+            h = urllib.request.urlopen(urllib.request.Request(url, method="HEAD",
+                headers={"User-Agent": "AlfDROID radio"}), timeout=3)
+            title = (h.headers.get("icy-title") or "").strip()
+        out[i - 1] = title
+    except Exception:
+        pass
+urls = sys.argv[1:]
+out = [""] * len(urls)
+ts = [threading.Thread(target=sniff, args=(i, u, out), daemon=True) for i, u in enumerate(urls, 1)]
+for t in ts:
+    t.start()
+for t in ts:
+    t.join(6)
+for i, t in enumerate(out, 1):
+    print(f"{i}\t{t}")
+]]
+
+-- Stations are picked by code: 1-8 for the first eight, then letters (skipping
+-- keys this script or mpv needs). Beyond that stations are <  > only. The menu
+-- prints each station's code, so a longer list stays fully reachable.
+local LETTERS = { "a", "b", "d", "f", "g", "h", "j", "k", "m", "n", "t", "u", "v", "x", "y", "z" }
+
+local function code_for(i)
+  if i <= 8 then return tostring(i) end
+  return LETTERS[i - 8]
+end
+
+-- The channels menu is a modal: it opens on the terminal's alternate screen, the
+-- same mechanism vim uses, so the log stays untouched behind it and comes back
+-- unchanged when a key closes the menu. Keys act through mpv's bindings: a code
+-- jumps, c or Esc just leaves.
+local modal = false
+
+local function modal_off()
+  if not modal then return end
+  modal = false
+  io.write("\27[?1049l")
+  io.flush()
+end
+
+local function jump(i)
+  if i <= mp.get_property_number("playlist-count", 0) then
+    modal_off()
+    mp.set_property("playlist-pos", i - 1)
+  end
+end
+
+local function channels()
+  local n = mp.get_property_number("playlist-count", 0)
+  if n == 0 then return end
+  local pos = mp.get_property_number("playlist-pos-1", 1)
+  modal = true
+  io.write("\27[?1049h\27[2J\27[H")
+  io.flush()
+  say(dim("checking " .. n .. " channels…"))
+  local urls = {}
+  for i = 0, n - 1 do urls[i + 1] = mp.get_property("playlist/" .. i .. "/filename", "") end
+  local q = {}
+  for i, u in ipairs(urls) do q[i] = string.format("%q", u) end
+  local py = os.tmpname()
+  local f = io.open(py, "w")
+  f:write(PY_SNIFF)
+  f:close()
+  local out = io.popen("python3 " .. py .. " " .. table.concat(q, " ") .. " 2>/dev/null")
+  local text = out and out:read("a") or ""
+  if out then out:close() end
+  os.remove(py)
+  local titles_by = {}
+  for line in text:gmatch("[^\n]+") do
+    local i, t = line:match("^(%d+)\t(.*)$")
+    if i and t then titles_by[tonumber(i)] = unmangle(t) end
+  end
+  for i = 1, n do
+    local name = mp.get_property("playlist/" .. (i - 1) .. "/title") or "?"
+    local colour = COLOURS[(i - 1) % #COLOURS + 1]
+    local title = titles_by[i]
+    say((i == pos and rgb("b3de69", "►") or " ") .. " " .. rgb(colour, string.format("%3s", code_for(i) or "") .. "  " .. name) ..
+        dim("   ") .. (title and title ~= "" and title or dim("—")))
+  end
+  say(dim("press a code to jump there · c or Esc close"))
+end
+
+mp.add_key_binding("c", "channels", function()
+  if modal then modal_off() else channels() end
+end)
+mp.add_key_binding("ESC", "close-menu", modal_off)
+
+for i = 1, 8 do
+  mp.add_key_binding(tostring(i), "station-" .. i, function() jump(i) end)
+end
+for k, key in ipairs(LETTERS) do
+  mp.add_key_binding(key, "station-" .. (8 + k), function() jump(8 + k) end)
+end
+
+-- <  > keep mpv's wrapping playlist behaviour but also close the menu. The keys'
+-- live-stream uses (seek) are pointless, so taking them over costs nothing.
+mp.add_key_binding("<", "station-prev", function()
+  modal_off()
+  local n = mp.get_property_number("playlist-count", 1)
+  mp.set_property("playlist-pos", (mp.get_property_number("playlist-pos", 0) - 1) % n)
+end)
+mp.add_key_binding(">", "station-next", function()
+  modal_off()
+  local n = mp.get_property_number("playlist-count", 1)
+  mp.set_property("playlist-pos", (mp.get_property_number("playlist-pos", 0) + 1) % n)
+end)
 
 mp.register_event("end-file", function() if timer then timer:kill() end end)
 
