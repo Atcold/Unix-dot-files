@@ -9,3 +9,9 @@ https://uk2.streamingpulse.com/ssl/vcr1
 https://stream.wqxr.org/wqxr
 #EXTINF:-1,Rai Radio Classica
 http://icestreaming.rai.it/5.mp3
+#EXTINF:-1,Radio Swiss Jazz
+https://stream.srg-ssr.ch/m/rsj/aacp_96
+#EXTINF:-1,Jazz24
+https://knkx-live-a.edge.audiocdn.com/6285_128k
+#EXTINF:-1,Secret Agent
+https://ice2.somafm.com/secretagent-128-mp3
