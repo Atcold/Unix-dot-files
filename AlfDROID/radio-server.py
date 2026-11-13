@@ -94,7 +94,9 @@ def load_stations():
 def fix_mojibake(s):
     """Undo double-encoded UTF-8: Venice sends StreamTitle as UTF-8 bytes encoded
     as UTF-8 again, so 'Félicien' arrives as 'FÃ©licien'. Decode once more when the
-    tell-tale 'Ã' shows up and the second decode comes out clean."""
+    tell-tale 'Ã' shows up and the second decode comes out clean. Venice also
+    trails a {+info: site} advertisement onto some titles: that goes too."""
+    s = re.sub(r"\s*\{\+info:[^}]*\}", "", s)
     if "Ã" in s:
         try:
             fixed = s.encode("latin-1", "strict").decode("utf-8", "strict")
