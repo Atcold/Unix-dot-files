@@ -2,9 +2,9 @@
 # Install the radio on one of my machines, from this folder.
 #
 #   ./install.sh mac      mpv: link the profile, the script, the playlist and the core
-#   ./install.sh phone    Termux: ffmpeg, icecast and python, and the server on the PATH
+#   ./install.sh droid    Termux: ffmpeg, icecast and python, and the server on the PATH
 #   ./install.sh all      both, for a machine that plays and serves
-#   ./install.sh --boot   with phone: also start the service when the phone boots
+#   ./install.sh --boot   with droid: also start the service when the droid boots
 #   ./install.sh -y       no questions, so a script can run it (it then needs a role)
 #
 # With no role it asks, offering what uname and $PREFIX suggest. A run with no terminal to
@@ -20,14 +20,14 @@ usage() {
 guess() {
   case "$(uname)" in
     Darwin) echo mac ;;
-    Linux) case "${PREFIX:-}" in *com.termux*) echo phone ;; *) echo mac ;; esac ;;
+    Linux) case "${PREFIX:-}" in *com.termux*) echo droid ;; *) echo mac ;; esac ;;
     *) echo mac ;;
   esac
 }
 
 for a in "$@"; do
   case "$a" in
-    mac | phone | all)
+    mac | droid | all)
       if [ -n "$ROLE" ]; then echo "one role at a time"; exit 2; fi
       ROLE="$a" ;;
     --boot) BOOT=yes ;;
@@ -40,9 +40,9 @@ done
 if [ -z "$ROLE" ]; then
   default="$(guess)"
   if [ "$YES" = yes ] || [ ! -t 0 ]; then
-    echo "name the machine to install for: mac, phone or all"; exit 2
+    echo "name the machine to install for: mac, droid or all"; exit 2
   fi
-  printf 'What should I install here? [mac/phone/all] (%s): ' "$default"
+  printf 'What should I install here? [mac/droid/all] (%s): ' "$default"
   read -r ROLE
   ROLE="${ROLE:-$default}"
 fi
@@ -57,7 +57,7 @@ if [ "$ROLE" = mac ] || [ "$ROLE" = all ]; then
   echo 'Done. mpv finds them all at ~~/, so the folder name does not matter.'
 fi
 
-if [ "$ROLE" = phone ] || [ "$ROLE" = all ]; then
+if [ "$ROLE" = droid ] || [ "$ROLE" = all ]; then
   echo 'Installing the packages the relays need'
   pkg install -y ffmpeg icecast python
 

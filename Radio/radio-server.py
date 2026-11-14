@@ -123,7 +123,7 @@ def encoder():
 
 
 def ensure_config():
-    """Write icecast.xml once, with random passwords kept on the phone for later runs."""
+    """Write icecast.xml once, with random passwords kept on the droid for later runs."""
     if CONFIG.exists():
         src = re.search(r"<source-password>([^<]+)", CONFIG.read_text())
         adm = re.search(r"<admin-password>([^<]+)", CONFIG.read_text())

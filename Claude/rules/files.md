@@ -9,7 +9,7 @@
 - PARA: `~/PARA` is `~/Dropbox/Apps/PARA`, outside any git repo, so each project home has its own memory. Never create a repo at or above it.
   - `~/PARA/Projects/<name>/` is a real folder of links: `repo` → `~/Work/GitHub/<repo>`, `local` → the project's data folder (`~/NYU/…`, `~/Dropbox/…`), `g-drive` → a Google Drive folder, `note.md` → the vault note. Look at the sibling projects before creating one.
   - A git repo never lives inside a cloud-synced folder (Dropbox, Google Drive): clone it into `~/Work/GitHub/` and link it as `repo`.
-- Both Macs are one front end used one at a time: mirror app config, data, state and cache through `~/Dropbox/Apps/<app>/`; never warn about sync conflicts. Terminal font size is per Mac on purpose.
+- Both Macs are one front end used one at a time: mirror app config, data, state and cache through `~/Dropbox/Apps/<app>/`; never warn about sync conflicts. Terminal font size is per Mac on purpose. A mirrored config can name per-machine binaries: when a shared config gains a local command (an MCP server, a tool path), install that binary on both Macs in the same sitting.
 - Links under `/Volumes/` break when the SSD is unplugged: normal, never report it.
 - During a restructure, leave alone what works and wasn’t called broken (*e.g.* `~/Book`).
 - Images, photos and scans: read them yourself with Read; never build an OCR pipeline. Read every page I supplied.

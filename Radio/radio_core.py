@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The rules my radio players share, so the Mac and the phone agree on what a piece is.
+"""The rules my radio players share, so the Mac and the droid agree on what a piece is.
 
 mpv on the Macs and the icecast relays on AlfDROID read the same icy StreamTitle chunks,
 and each has to make the same three decisions about every title it gets. Stations double-
@@ -9,7 +9,7 @@ something I listened to. A player announces one piece several times, so it belon
 log once. Those decisions live here, and each player keeps its own terminal or web page.
 
 The stations themselves come from radio.m3u in this folder, which install.sh also links
-into mpv's config folder, so the Macs and the phone play the same list.
+into mpv's config folder, so the Macs and the droid play the same list.
 
 Run it directly to use the rules from a shell:
 

@@ -145,7 +145,7 @@ local function listen(station, title)
   end)
 end
 
--- The rules that decide what a piece is live in radio_core.py, shared with the phone's
+-- The rules that decide what a piece is live in radio_core.py, shared with the droid's
 -- server so both boxes agree: it undoes the double encoding Venice sends, drops the
 -- {+info: site} advertisement, and calls a station's own announcement a banner. One
 -- short-lived python3 per title and per menu refresh, against a title every few minutes.
@@ -284,7 +284,7 @@ mp.observe_property("metadata/by-key/icy-title", "string", function(_, title) ne
 
 -- Audiocdn, which serves Jazz24, leaves StreamTitle empty in most metadata chunks and
 -- names the piece in a single one, and mpv can miss that chunk: the property then lags by
--- about a minute. The poll reads the stream the way the phone's server does, so the pane
+-- about a minute. The poll reads the stream the way the droid's server does, so the pane
 -- catches up by itself. mpv's property stays the fast path, and new_title decides once
 -- between the two, since both end in the same watch.
 mp.add_periodic_timer(20, function()
