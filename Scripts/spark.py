@@ -13,8 +13,10 @@ works outside the LAN too. The machine itself is reached over the tailnet.
   spark on [--wait]     power on; --wait: until ssh answers
   spark off             clean shutdown over ssh, then plug off
   spark restart         off, then on --wait
-  spark models          the model store on the Spark: org/name, size, what is served
+  spark models          the model store on the Spark: number, org/name, size, what is served
+  spark model <n|id>    what the Hub records for one of them: quantization, parameters, base model, licence
   spark serving         what runs on the Spark: state, uptime, image, forwarded port
+  spark speed           tokens per second from a live probe: first token, prompt processing, generation   [<model> [server]]
   spark serve           serve a model: start it, open its tunnel, wait for its API   [<model> [server] | tunnel]
   spark unserve         stop a served model, close its tunnel                        [<model> [server] | tunnel]
   spark setup           names in ~/.config/spark/config.toml, login in the Keychain or a private file
@@ -35,6 +37,8 @@ import sys
 import threading
 import time
 import tomllib
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -72,6 +76,11 @@ def cyan(s): return c(s, "1", "36")
 def accent(s): return c(s, "1", "35")
 def ok(msg): print(green("✓ ") + msg)
 def err(msg): sys.exit(red("✗ ") + msg)
+
+
+def fact(label, value):
+    # One aligned label and its value: status, model_info and speed all answer in this shape
+    print(f"  {dim(label.ljust(13))}{value}")
 
 
 def width(s):
@@ -266,6 +275,24 @@ def tunnel(port):
     """('listen-port', 'target') of the ssh -L tunnel on the port; None if nobody listens,
     a name if something other than ssh holds the port."""
     return tunnel_lsof(port) if sys.platform == "darwin" else tunnel_proc(port)
+
+
+def ensure_tunnel(cfg, local, remote):
+    """This machine's ssh pipe for the port pair, opened if it is not up yet. serve and
+    speed both need the far end reachable, and neither should fail where it could just
+    open the pipe. -fN backgrounds a connection with no commands: forwarding is its only
+    job, and ExitOnForwardFailure makes a lost port fail the ssh instead of idling."""
+    if isinstance(tunnel(local), tuple):
+        ok(f"tunnel :{local} already open")
+        return
+    r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
+                        "-o", "ServerAliveInterval=30", "-L",
+                        f"127.0.0.1:{local}:127.0.0.1:{remote}", cfg["host"]],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        err(f"tunnel: {r.stderr.strip()}")
+    ends = f":{local}" if local == remote else f":{local} → :{remote}"
+    ok(f"tunnel {ends} {green('open')}")
 
 
 def device_name():
@@ -681,19 +708,7 @@ def serve(cfg, model=None, server=None):
             if started.returncode != 0:
                 err(f"docker start: {started.stderr.strip().splitlines()[-1]}")
             ok(f"{bold(name)}: {green('started')}")
-        if not isinstance(tunnel(local), tuple):
-            # -fN backgrounds a connection with no commands: forwarding is its only job,
-            # and ExitOnForwardFailure makes a lost port fail the ssh instead of idling
-            r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
-                                "-o", "ServerAliveInterval=30", "-L",
-                                f"127.0.0.1:{local}:127.0.0.1:{remote}", cfg["host"]],
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                err(f"tunnel: {r.stderr.strip()}")
-            ends = f":{local}" if local == remote else f":{local} → :{remote}"
-            ok(f"tunnel {ends} {green('open')}")
-        else:
-            ok(f"tunnel :{local} already open")
+        ensure_tunnel(cfg, local, remote)
         if server not in STAGE_PARSER:  # only a server spark can read is waited for
             ok(f"{bold(name)} up; {bold(server)} has no health check spark knows, "
                f"{cyan('spark serving')} to see state")
@@ -972,7 +987,10 @@ def served_models(cfg):
     return served
 
 
-def models(cfg):
+def cache_rows(cfg):
+    """The model store on the Spark as rows from `hf cache ls`, heaviest first: the one
+    listing behind `spark models` and behind the numbers `spark model <n>` reads, so the
+    number you see is the number you type."""
     if not ssh_up(cfg["host"]):
         err(f"{bold(cfg['host'])} is not answering ssh: {cyan('spark on')} first")
     # The remote shell expands the ~ of the hf path
@@ -985,27 +1003,172 @@ def models(cfg):
         rows = json.loads(r.stdout)
     except json.JSONDecodeError:
         err(f"Unexpected output from {bold(cfg['hf'])}; check the {bold('hf')} key in the config")
-    served = served_models(cfg)
-    # The [models] table says which of these ids spark has a server ready for
-    servers = {m: ", ".join(t[0] for t in model_rows(cfg, m) or []) for m in cfg["models"]}
 
     def weight(row):  # sort by bytes: 102.3G > 7.7G > 306.5M
         s, unit = row["size"][:-1], row["size"][-1]
         return float(s) * {"K": 1e-3, "M": 1, "G": 1e3, "T": 1e6}.get(unit, 1)
 
+    return sorted(rows, key=weight, reverse=True)
+
+
+def models(cfg):
+    rows = cache_rows(cfg)
+    served = served_models(cfg)
+    # The [models] table says which of these ids spark has a server ready for
+    servers = {m: ", ".join(t[0] for t in model_rows(cfg, m) or []) for m in cfg["models"]}
+
     w_id = max(len(row["repo_id"]) for row in rows) + 2
     w_sz = max(len(row["size"]) for row in rows)
     w_la = max(len(row["last_accessed"]) for row in rows)
-    print("  " + dim("model".ljust(w_id) + "size".rjust(w_sz) + "  "
-                     + "last access".ljust(w_la)))
-    for row in sorted(rows, key=weight, reverse=True):
+    w_n = len(str(len(rows)))  # the number column fits the largest row
+    print("  " + " " * (w_n + 2) + dim("model".ljust(w_id) + "size".rjust(w_sz) + "  "
+                                        + "last access".ljust(w_la)))
+    for i, row in enumerate(rows, 1):
         rid = row["repo_id"]
         mark = (green("  ← served") if rid in served
                 else accent(f"  · server: {servers[rid]}") if rid in servers else "")
         org, _, model = rid.partition("/")  # the author's hand, then the model
-        print(f"  {cyan(org + '/')}{bold(model)}{' ' * (w_id - len(row['repo_id']))}"
+        print(f"  {dim(f'{i:>{w_n}}')}  {cyan(org + '/')}{bold(model)}"
+              f"{' ' * (w_id - len(row['repo_id']))}"
               f"{accent(row['size'].rjust(w_sz))}  {dim(row['last_accessed'].ljust(w_la))}{mark}")
-    print(dim(f"\n  {len(rows)} models on {cfg['host']}, from {cfg['hf']}"))
+    print(dim(f"\n  {len(rows)} models on {cfg['host']}, from {cfg['hf']}"
+              f" — {cyan('spark model')} <n> asks the Hub about one"))
+
+
+# Tags the Hub gives a quantized checkpoint: the formats (nvfp4, fp4, mxfp8, int4),
+# the bit widths, and the tools that wrote them (Model Optimizer, compressed-tensors)
+QUANT_TAG = re.compile(r"^(?:nv)?fp\d+(?:e\d+m\d+)?$|^\d+-bit$|^int\d$|^mxfp\d$|"
+                       r"^modelopt$|^model optimizer$|^compressed-tensors$|^gptq$|^awq$|^quantized$",
+                       re.I)
+
+
+def people(n):
+    # Counts as they read: 45305 is 45.3k, 96486615005 is 96.5B. Lowercase k, as
+    # everywhere. Below 1k the value prints as written, and a float keeps one decimal
+    # at most: rates arrive as floats (42.7 tok/s), counters as whole 473.0s
+    for lim, unit in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "k")):
+        if n >= lim:
+            return f"{n / lim:.1f}".rstrip("0").rstrip(".") + unit
+    if isinstance(n, float):
+        return f"{n:.1f}".rstrip("0").rstrip(".")
+    return str(n)
+
+
+def hub_size(n):
+    # The Hub reports bytes; the smaller units keep a 289.5k repo from reading "0.0 GB"
+    for lim, unit in ((1e12, "TB"), (1e9, "GB"), (1e6, "MB"), (1e3, "KB")):
+        if n >= lim:
+            return f"{n / lim:.1f} {unit}"
+    return f"{n} B"
+
+
+def hf_get(repo_id):
+    """The Hub API's record for one model, or None when it answers nothing: a missing,
+    renamed or gated repo. A public card needs no token."""
+    r = subprocess.run(["curl", "-s", "--max-time", "15",
+                        f"https://huggingface.co/api/models/{repo_id}"],
+                       capture_output=True, text=True)
+    try:
+        info = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+    return info if isinstance(info, dict) and "error" not in info else None
+
+
+def quant_facts(info):
+    """Parts of the quantization line, in the order they are worth reading: the method
+    config.json names, the bit widths the compressed-tensors groups record, then the
+    Hub's format tags. A bare `quantized` tag speaks only when nothing else does."""
+    qc = (info.get("config") or {}).get("quantization_config") or {}
+    parts = []
+    if qc.get("quant_method"):
+        parts.append(str(qc["quant_method"]))
+    bits = {g["weights"]["num_bits"] for g in (qc.get("config_groups") or {}).values()
+            if isinstance(g, dict) and isinstance(g.get("weights"), dict)
+            and isinstance(g["weights"].get("num_bits"), int)}
+    parts += [f"{b}-bit" for b in sorted(bits)]
+
+    def key(s):  # Model Optimizer signs its cards two ways, tool name in config.json
+        s = s.lower().replace(" ", "")  # and tag, and they must collapse to one entry
+        return "modelopt" if s == "modeloptimizer" else s
+
+    seen = {key(p) for p in parts}
+    tags = []
+    for t in info.get("tags") or []:
+        if QUANT_TAG.match(t) and key(t) not in seen:
+            seen.add(key(t))
+            tags.append(t)
+    if parts or len(tags) > 1:
+        tags = [t for t in tags if t.lower() != "quantized"]
+    return parts + tags
+
+
+def model_info(cfg, arg):
+    """`spark model <n | org/name>`: what the Hub records about one model — quantization,
+    parameter count, the model it was made from, licence, popularity. A number is the row
+    `spark models` printed, so both commands read the same listing."""
+    if not arg:
+        err(f"which model? {cyan('spark models')} numbers them, then {cyan('spark model')} <n>")
+    row, rid = None, arg
+    if arg.isdigit():
+        rows = cache_rows(cfg)
+        if not 1 <= int(arg) <= len(rows):
+            err(f"No model number {bold(arg)}: {cyan('spark models')} lists {len(rows)}")
+        row = rows[int(arg) - 1]
+        rid = row["repo_id"]
+    info = hf_get(rid)
+    if info is None:
+        err(f"The Hub answers nothing for {bold(rid)}: it is missing, renamed, or gated "
+            f"behind a login")
+
+    org, _, name = rid.partition("/")
+    head = f"{cyan(org + '/')}{bold(name)}"
+    if info.get("sha"):
+        head += dim(f"  rev {info['sha'][:7]}")
+    print()
+    fact("model", head)
+    task = " · ".join(x for x in (info.get("pipeline_tag"), info.get("library_name")) if x)
+    if task:
+        fact("task", task)
+    quant = quant_facts(info)
+    if quant:
+        fact("quantization", accent(" · ".join(quant)))
+    st = info.get("safetensors") or {}
+    if st.get("total"):
+        # the element count the Hub itself prints; the dtypes say what holds them, and
+        # a packed quantized store (U8 for FP4 codes) is where these outrun the model's
+        # own parameter count — the base model line below carries the honest number
+        fact("parameters", accent(people(st["total"])) + " tensor elements, "
+             + dim(", ".join(f"{d} {people(n)}"
+                             for d, n in sorted((st.get("parameters") or {}).items(),
+                                                key=lambda kv: -kv[1]))))
+    base = (info.get("cardData") or {}).get("base_model")
+    if isinstance(base, list):
+        base = base[0] if base else None
+    if base:
+        line = bold(base)
+        binfo = hf_get(base)  # the original's card gives the parameter count a quantized store cannot
+        if binfo and (binfo.get("safetensors") or {}).get("total"):
+            # a base that is itself a quantization (one checkpoint made from another)
+            # holds packed bytes too: only an original's element count is a parameter count
+            noun = "parameters" if not quant_facts(binfo) else "tensor elements"
+            line += dim(f"  ·  {people(binfo['safetensors']['total'])} {noun}")
+        fact("base model", line)
+    card = info.get("cardData") or {}
+    if card.get("license_name") or card.get("license"):
+        fact("licence", card.get("license_name") or card["license"])
+    hub = [f"{people(info.get('downloads') or 0)} downloads",
+           f"{people(info.get('likes') or 0)} likes"]
+    if info.get("lastModified"):
+        hub.append(f"updated {info['lastModified'][:10]}")
+    if info.get("usedStorage"):
+        hub.append(f"{hub_size(info['usedStorage'])} on the Hub")
+    if info.get("gated"):
+        hub.append("gated")
+    fact("Hub", " · ".join(hub))
+    if row:
+        fact("Spark", f"{accent(row['size'])} cached  {dim('·  last access ' + row['last_accessed'])}")
+    print()
 
 
 def setup(cfg):
@@ -1041,6 +1204,77 @@ def setup(cfg):
     ok(f"wrote {bold(short(CONFIG))}")
 
 
+def _completion(port, prompt, max_tokens, timeout=180):
+    """One /v1/completions call through urllib, so the clock wraps only the request:
+    returns (seconds, prompt_tokens, completion_tokens) with the token counts the
+    server itself counted, not an estimate of ours."""
+    body = json.dumps({"prompt": prompt, "max_tokens": max_tokens,
+                       "temperature": 0}).encode()
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions",
+                                 data=body, headers={"Content-Type": "application/json"})
+    t0 = time.perf_counter()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            answer = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        err(f"api :{port} refused the probe ({e.code}): {e.read().decode()[:120]}")
+    except OSError as e:
+        err(f"api :{port} no answer ({e}): {cyan('spark serve')} to bring the model up")
+    return time.perf_counter() - t0, answer["usage"]["prompt_tokens"], answer["usage"]["completion_tokens"]
+
+
+def metric_sums(port, names):
+    """Sums of the named vLLM counters from /metrics, as {name: total}. A server
+    without the endpoint, or a build that renamed them, just answers {}."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=5) as r:
+            body = r.read().decode()
+    except OSError:
+        return {}
+    out = {}
+    for line in body.splitlines():
+        for n in names:
+            if line.startswith((n + "{", n + " ")):
+                out[n] = out.get(n, 0.0) + float(line.rsplit(" ", 1)[1])
+    return out
+
+
+def speed(cfg, model=None, server=None):
+    """`spark speed`: how fast the served model answers, measured now. Three probes
+    through the model's own API, each carrying a fresh nonce so vLLM's prefix cache
+    answers none of them from an earlier run: a short request for the first token, a
+    long one for prompt processing, and 256 generated tokens for the decode rate."""
+    p = pick(cfg, model, server)
+    if p is None:
+        err(unknown_model(cfg, model or cfg["model"], server))
+    model, server, local, remote, name = p
+    ensure_tunnel(cfg, local, remote)
+    if not model_ready(local):
+        err(f"api {bold(f':{local}')} no answer: {cyan('spark serve')} to bring the model up")
+    print(dim(f"probing {bold(model)} on {bold(f'{device_name()}:{local}')}…"))
+    nonce = os.urandom(8).hex()
+    t_first, _, _ = _completion(local, f"Count to five, {nonce}:", 1)
+    fact("first token", accent(f"{t_first:.2f} s") + dim("  (short prompt)"))
+    probe = f"{nonce} notes. " + "The quick brown fox jumps over the lazy dog. " * 200
+    t_pre, pt, _ = _completion(local, probe, 1)
+    fact("prefill", accent(f"{people(pt / t_pre)} tok/s") + dim(f"  ({people(pt)} tokens in {t_pre:.2f} s)"))
+    t_gen, _, ct = _completion(local, f"Write a short story about a machine, {nonce}.", 256)
+    # the request's own prefill rides inside t_gen: the first probe measured that cost
+    # for a prompt of this size, so subtracting it leaves the token-to-token rate
+    fact("generation", accent(f"{people(ct / max(t_gen - t_first, 0.1))} tok/s")
+         + dim(f"  ({ct} tokens in {t_gen:.1f} s)"))
+    counters = metric_sums(local, ("vllm:generation_tokens_total", "vllm:prompt_tokens_total",
+                                   "vllm:request_success_total"))
+    if counters:
+        gen = counters.get("vllm:generation_tokens_total", 0)
+        pre = counters.get("vllm:prompt_tokens_total", 0)
+        req = counters.get("vllm:request_success_total", 0)
+        fact("served", f"{people(gen)} tokens generated, {people(pre)} prompt tokens,"
+             f" {people(req)} requests  {dim('since the service started')}")
+    print(dim("  one sequence each: several requests share the GPU, so totals differ"))
+    print()
+
+
 # command: (what it does, [(option, what it does)]), as tg-mail's gmail lists them
 COMMANDS = {
     "status": ("Plug state and power; the machine on the tailnet; the default model's service and its tunnel.", []),
@@ -1049,8 +1283,12 @@ COMMANDS = {
            [("--wait", "Wait until ssh answers, and print the boot time.")]),
     "off": ("Clean shutdown over ssh, then plug off.", []),
     "restart": ("off, then on --wait.", []),
-    "models": ("The model store on the Spark: org/name, size, last access, and what is served.", []),
+    "models": ("The model store on the Spark: number, org/name, size, last access, and what is served.", []),
+    "model": ("What the Hub records for one model: quantization, parameter count, the base "
+              "model it was made from, licence, popularity. The number is spark models' row.", []),
     "serving": ("What runs on the Spark: state, uptime, image, forwarded port.", []),
+    "speed": ("Tokens per second from a live probe: first token, prompt processing, "
+              "generation, and what the service has served in total.", []),
     "serve": ("Serve a model: start its server, open its tunnel, wait for its API. "
               "With tunnel, open just this machine's pipe.", []),
     "unserve": ("Stop a served model, close its tunnel. With tunnel, close just "
@@ -1060,7 +1298,8 @@ COMMANDS = {
 
 # Positional slots shown in the Usage line, in order
 USAGE = {"serving": "", "serve": "[<model> [server] | tunnel]",
-         "unserve": "[<model> [server] | tunnel]"}
+         "unserve": "[<model> [server] | tunnel]", "model": "<n | org/name>",
+         "speed": "[<model> [server]]"}
 
 
 # What `spark <command> --help` adds below the one-line summary
@@ -1083,6 +1322,22 @@ DETAILS = {
         "model already serving, no power and no container start, for any machine",
         f"that just wants to reach the Spark. {cyan('spark unserve tunnel')} closes",
         "the pipe and leaves the service to whoever keeps it alive.",
+    ],
+    "model": [
+        f"The number is {cyan('spark models')}' row, heaviest first: both commands read",
+        "one listing, so the number you see is the number you type. An org/name is",
+        "looked up on the Hub directly, which is how a base model's own card opens.",
+        "The facts come from the Hub's API for the repo: its config.json, tags, and",
+        "card. A quantized store counts packed bytes as elements, so the honest",
+        "parameter count rides on the base model's line.",
+    ],
+    "speed": [
+        "Three timed probes reach the served model over its tunnel: a one-token",
+        "request for time to first token, a long prompt for how fast it reads, and a",
+        "256-token request for how fast it writes.",
+        f"The {dim('served')} line is vLLM's own counters, so it counts every request",
+        f"since the service started, not just this probe. {cyan('spark serving')} shows",
+        "how long that is.",
     ],
 }
 
@@ -1170,8 +1425,12 @@ def main():
             asyncio.run(restart(cfg))
         elif command == "models":
             models(cfg)
+        elif command == "model":
+            model_info(cfg, model)
         elif command == "serving":
             serving(cfg)
+        elif command == "speed":
+            speed(cfg, model, server)
         elif command == "serve":
             serve(cfg, model, server)
         elif command == "unserve":

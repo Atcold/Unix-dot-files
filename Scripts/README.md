@@ -4,7 +4,20 @@ Standalone utility scripts. Portable across macOS and Linux.
 
 ## `spark.py`
 
-Powers a machine on a Kasa smart plug (AlfSPARK, by default) on and off from anywhere: the plug is switched through TP-Link's cloud, the machine is reached over the tailnet. `spark status`, `on [--wait]`, `off` (clean shutdown over `ssh` first, then the plug), `restart`, `setup`. macOS only: the TP-Link login lives in the Keychain. Runs with `uv run --script`, which fetches its one dependency; link it onto the `PATH` as `spark` with `ln -s ~/.settings/Scripts/spark.py ~/.local/bin/spark`.
+Runs AlfSPARK end to end from any machine (macOS or Termux): powers the Kasa smart plug through TP-Link's cloud, starts the container that serves a model, opens this machine's ssh tunnel to it, and reports each fact on its own line.
+
+  spark s                      plug, tailnet, service, tunnel, api
+  spark on [--wait] | off | restart
+  spark serve [<model> [server] | tunnel]    start a service, open the pipe, wait for the API; tunnel joins one already running
+  spark unserve ...                          stop it; tunnel closes only this machine's pipe
+  spark serving                what runs on the Spark
+  spark models                 the model store, numbered, heaviest first
+  spark model <n | org/name>   what the Hub records: quantization, parameters, base model, licence
+  spark speed                  tokens per second from a live probe: first token, prefill, generation
+  spark wattage                live chart of the plug's draw
+  spark setup                  first run: names and the TP-Link login
+
+`spark help <cmd>` explains any command. The config is `~/.config/spark/config.toml` (`model`, `hf`, and a `[models]` table of `[server, local, remote]` triples); the TP-Link login lives in the Keychain on macOS, in `~/.config/spark/credentials.toml` (mode 600) elsewhere. Runs with `uv run --script`, which fetches its one dependency; link it onto the `PATH` as `spark` with `ln -s ~/.settings/Scripts/spark.py ~/.local/bin/spark`.
 
 ## `wget-resume.sh`
 
