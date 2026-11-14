@@ -6,8 +6,7 @@
 - One concern per commit. Split unrelated changes.
 - A finished code change ends documented (repo `CLAUDE.md`, the spec, or a note) and committed; don’t stop at a dirty tree and ask.
 - But I am the tester: for anything I have to try (config, bindings, scripts, apps), apply it, restart what needs restarting, tell me what to try, and commit only after my OK. No self-checks of your own fix.
-- Commit freely during a session, drafts I’m reviewing included, so local work is never lost. Push only when I call the end of the session: then squash the session’s commits into one per concern, push, and pull the clone on the other Mac.
-- Fixing a commit already made: amend (and `push --force-with-lease` if pushed) instead of stacking a ‘fix’ commit. After a squash, same-session tweaks are amended in.
+- One commit per theme, amended until the theme is done, then pushed; pull on the other Mac when it’s reachable.
 - No separate `git status` after `git add`: `git add <files> && git commit -m …`. Never chain `commit` and `push` into one hidden command.
 - Tool repos hold tools only: none of my data, real paths, hosts or names; examples use placeholders. `git grep` for my identifiers before committing.
 - Never commit binaries (PDFs, PNGs, renders, notebook output). Exception: images a lesson needs in learning-with-claude. Images for a GitHub issue are uploaded in the browser, never hosted in a repo.
