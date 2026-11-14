@@ -1,0 +1,74 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{fontspec}
+\setmonofont{Latin Modern Mono}[Ligatures=TeXOff]  % -- stays two hyphens in \texttt
+\usepackage[margin=20mm]{geometry}
+\usepackage{microtype,tikz,booktabs,enumitem,fancyvrb}
+\usepackage{alfdoc}
+\usetikzlibrary{fit,positioning}
+\usepackage[colorlinks=true]{hyperref}
+\pagestyle{empty}
+\setlist{nosep,itemsep=1pt}
+\newcommand{\n}[1]{\textsf{#1}}
+\newcommand{\home}{\textasciitilde}
+\begin{document}
+
+\noindent{\LARGE\bfseries \n{para}: the plan}\\[1mm]
+Alfredo Canziani, 14 Nov 2026\par\medskip
+
+\noindent \n{para} is one terminal app that shows all my work. It lists every project with its last round, the day I last touched it, and its next step, and it keeps the queue of what waits on me now, readings first. This first revision fixes the shape only; later revisions add how each part works.
+
+\section{Why}
+
+I have 44 project notes in the vault, 27 project folders in \n{\home/PARA}, and 37 repos, and nothing shows them together. Each document records its rounds in its revision table, but a project records none, so I cannot tell where a project stands. Today 25 PDFs wait in \n{Boox/Review} in no order, and \n{p} finds only the work that has a folder. My inbox was in the same state until the side pane gave it a queue: items arrive, wait for me, get handled, and close. \n{para} applies that queue to my projects.
+
+\section{The names}
+
+\begin{itemize}
+  \item A \textbf{project}, an \textbf{area}, and a \textbf{resource} are the three active kinds of Tiago Forte's \href{https://fortelabs.com/blog/para/}{PARA method}.
+  \item A \textbf{round} is one cycle on a project: Claude builds a document, I read it on the Boox and dictate notes, and Claude takes them in. It is to a project what a revision is to a document.
+  \item The \textbf{board} is every project on one screen, and the \textbf{queue} is what waits on me now.
+\end{itemize}
+
+\section{The picture}
+
+\begin{center}
+\begin{tikzpicture}[font=\sffamily\small,
+  box/.style={draw,very thick,rounded corners=3pt,align=center,minimum width=34mm,minimum height=8mm},
+  lab/.style={font=\sffamily\scriptsize,text=black!55}]
+  \node[lab] at (0,1.0) {what exists};
+  \node[box,draw=blue]   (v) at (0,0.2)  {vault notes};
+  \node[box,draw=blue]   (g) at (0,-0.6) {repos, revision tables};
+  \node[box,draw=blue]   (f) at (0,-1.4) {\home/PARA folders};
+  \node[box,draw=blue]   (b) at (0,-2.2) {Boox/Review};
+  \node[lab] at (6,1.0) {the app};
+  \node[box,draw=violet,minimum height=30mm,minimum width=36mm] (p) at (6,-1.0) {};
+  \node[font=\sffamily\bfseries] at (6,0.2) {para};
+  \node[box,draw=violet,minimum width=26mm,minimum height=6mm] at (6,-0.6) {board};
+  \node[box,draw=violet,minimum width=26mm,minimum height=6mm] at (6,-1.35) {project};
+  \node[box,draw=violet,minimum width=26mm,minimum height=6mm] at (6,-2.1) {queue};
+  \node[lab] at (12,1.0) {who asks};
+  \node[box,draw=aqua] (me)  at (12,-0.4) {me, in the terminal};
+  \node[box,draw=aqua] (bot) at (12,-1.6) {AlfBOT};
+  \foreach \s in {v,g,f,b} \draw[->] (\s.east) -- (p.west |- \s.east);
+  \draw[->] (p.east |- me) -- (me);
+  \draw[->] (p.east |- bot) -- (bot);
+  \draw[->] (me.east) -- ++(0.4,0) |- node[lab,below,pos=.75] {each round writes back: a revision, a log entry, a next step} (0,-3.1) -- (b.south);
+\end{tikzpicture}
+\end{center}
+
+\noindent Like \n{spark}, \n{para} is one command with subcommands. \texttt{para projects} prints the board, \texttt{para project 2} opens one project, and \texttt{para queue} lists what waits on me.
+
+\begin{Verbatim}[fontsize=\footnotesize]
+$ para projects
+  #  key   project               area          touched  round  next
+  1  lwc   learning-with-claude  second-brain  14 Nov   r19    radio/ lesson
+  2  bot   alfbot                second-brain  13 Nov   r4     read alfbot-plan   < me
+  3  lc    local-coding          ai            13 Nov   r13    spark speed numbers
+\end{Verbatim}
+
+\section{What others do}
+
+David Allen's \href{https://gettingthingsdone.com/}{\textit{Getting Things Done}} keeps a next action for every project and a weekly review that finds the projects without one. \href{https://taskwarrior.org/docs/report/}{\n{Taskwarrior}} prints \texttt{projects} and \texttt{next} reports in the terminal. \n{Obsidian}'s \href{https://blacksmithgu.github.io/obsidian-dataview/}{\n{Dataview}} plugin draws a project table from each note's properties and last change. \href{https://ryanparsley.codeberg.page/cerebro/print.html}{\n{cerebro}} builds a terminal dashboard from git activity, agent sessions, and per-project notes. \n{para} takes the next action and the review from \textit{GTD}, and adds the round, which comes from our way of working.
+
+\revisiontable
+\end{document}
