@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Open PDFs side by side on the screen next to the terminal.
+
+  pdf-show a.pdf [b.pdf …]
+
+Between sunset and sunrise they open in Preview with View ▸ Use Dark Appearance for PDF, after
+every Preview document is closed (Preview names windows by file name alone). In daylight they open
+in Skim, which reloads them on every rebuild. Sunset comes from the time zone's main city.
+"""
+import datetime as dt, math, os, subprocess, sys, time
+
+CITY = {'America/New_York': (40.71, -74.01), 'Europe/Rome': (41.90, 12.50)}
+
+
+def zone():
+    link = os.path.realpath('/etc/localtime')
+    return link.split('zoneinfo/')[-1]
+
+
+def sun_hours(lat, lon, day):
+    """Sunrise and sunset in local hours (NOAA's approximation)."""
+    n = day.timetuple().tm_yday
+    g = 2 * math.pi / 365 * (n - 1)
+    eq = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g)
+                   - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
+    dec = (0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g)
+           + 0.000907 * math.sin(2 * g) - 0.002697 * math.cos(3 * g) + 0.00148 * math.sin(3 * g))
+    ha = math.degrees(math.acos(math.cos(math.radians(90.833)) / (math.cos(math.radians(lat)) * math.cos(dec))
+                                - math.tan(math.radians(lat)) * math.tan(dec)))
+    offset = dt.datetime.now().astimezone().utcoffset().total_seconds() / 60
+    noon = 720 - 4 * lon - eq + offset
+    return (noon - 4 * ha) / 60, (noon + 4 * ha) / 60
+
+
+def night():
+    lat, lon = CITY.get(zone(), CITY['America/New_York'])
+    rise, sset = sun_hours(lat, lon, dt.date.today())
+    now = dt.datetime.now()
+    h = now.hour + now.minute / 60
+    return h < rise or h >= sset
+
+
+def osa(script, lang='AppleScript'):
+    return subprocess.run(['osascript', '-l', lang, '-e', script], capture_output=True, text=True).stdout.strip()
+
+
+def target_screen():
+    """The screen beside the one holding the terminal, in AppleScript's top-left coordinates."""
+    js = '''ObjC.import("AppKit"); var s=$.NSScreen.screens, h=s.objectAtIndex(0).frame.size.height, o=[];
+    for (var i=0;i<s.count;i++){var v=s.objectAtIndex(i).visibleFrame;
+      o.push([v.origin.x, h-v.origin.y-v.size.height, v.size.width, v.size.height].join(" "))}; o.join(";")'''
+    screens = [tuple(map(float, s.split())) for s in osa(js, 'JavaScript').split(';')]
+    pos = osa('tell application "System Events" to get position of window 1 of process "Terminal"')
+    tx = float(pos.split(',')[0]) + 1 if pos else 0
+    here = next((s for s in screens if s[0] <= tx < s[0] + s[2]), screens[0])
+    beside = [s for s in screens if s is not here and (abs(s[0] - here[0] - here[2]) < 2 or abs(s[0] + s[2] - here[0]) < 2)]
+    return (beside or [s for s in screens if s is not here] or [here])[0]
+
+
+files = [os.path.abspath(f) for f in sys.argv[1:]]
+names = [os.path.basename(f) for f in files]
+dark = night()
+app = 'Preview' if dark else 'Skim'
+if dark:
+    osa('tell application "Preview" to close every document')
+    time.sleep(0.5)
+subprocess.run(['open', '-a', app, *files])
+time.sleep(1.5)
+
+x, y, w, h = target_screen()
+cols = max(1, min(len(files), int(w // 720)))  # Preview keeps a window at least about 708 wide
+rows = math.ceil(len(files) / cols)
+col, row = int(w // cols), int(h // rows)
+for i, name in enumerate(names):
+    set_dark = '''
+    set mi to menu item "Use Dark Appearance for PDF" of menu "View" of menu bar 1
+    if (value of attribute "AXMenuItemMarkChar" of mi) is missing value then click mi''' if dark else ''
+    osa(f'''tell application "{app}" to activate
+    tell application "System Events" to tell process "{app}"
+      set w to (first window whose name starts with "{name}")
+      set value of attribute "AXMain" of w to true
+      perform action "AXRaise" of w
+      delay 0.6
+      set position of w to {{{int(x) + i % cols * col}, {int(y) + i // cols * row}}}
+      set size of w to {{{col}, {row}}}
+      delay 0.3
+      set position of w to {{{int(x) + i % cols * col}, {int(y) + i // cols * row}}}
+      set size of w to {{{col}, {row}}}{set_dark}
+    end tell''')
+print(f'{app}{" (dark)" if dark else ""}: {", ".join(names)}')
