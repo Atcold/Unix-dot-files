@@ -1,0 +1,2 @@
+# alfdoc: every successful build goes to the e-reader's Review folder (revision.pl)
+$alfdoc_boox = "$ENV{HOME}/Dropbox/Boox";
