@@ -19,37 +19,33 @@
 \noindent{\LARGE\bfseries \csname @title\endcsname}\\[1mm]
 \csname @author\endcsname, \csname @date\endcsname\par\medskip
 
-% Review: “it definitely needs to have like a favorite or something section for the things that actually have superuser privileges let's call it this way for example my book should be the top of my priority in this week I spent exactly 0 minutes working on my week on my book and this is bad right because that's the only thing I'm supposed to do …”
-\noindent \n{para} is one terminal app that shows all my work and what waits on me. It lists everything I work on, with the time since I last touched it and its next step, and it keeps the queue of what waits on me now. A few items are pinned to the top, whatever else happens, and the book comes first\here[pinned, book first][Pinned items stay at the top of the list, with the book first.]. This revision still fixes the shape only; later revisions add how each part works.
+\noindent \n{para} is one terminal app that shows all my work and what waits on me. It lists everything I work on, with the time since I last touched it and its next step, and it keeps the queue of what waits on me now. A few items are pinned to the top, whatever else happens, and the book comes first. % Review: “I am not familiar with PMI, PMBOK guide. … Maybe you can add one these two references as well in the document, in the current version, current revision.”
+The plan grows by stepwise refinement~\cite{wirth}, which project management calls progressive elaboration~\cite{pmbok}: each revision is one reading of mine, and my notes decide which part gets more detail next. This plan fixes the shape, and a design document comes next with how each part works.
 
 \section{Why}
 
-% Review: “same for example I was not even aware about this numbers so some sort of like summary of numbers of whatever is going on it would be great …”
-I have 44 notes in the vault's \n{Projects} folder, 27 project folders in \n{\home/PARA}, and 37 repos, and nothing shows them together\here[counts on top][The counts that open this section also open the list, so I see the size of things at a glance.]. Each document records its rounds in its revision table, but nothing records how the work itself moves, so I cannot tell where anything stands. Today 25 PDFs wait in \n{Boox/Review} in no order, and \n{p} finds only the work that has a folder. This week I spent no time on the book.
+I have 44 notes in the vault's \n{Projects} folder, 27 project folders in \n{\home/PARA}, and 37 repos, and nothing shows them together. Each document records its rounds in its revision table, but nothing records how the work itself moves, so I cannot tell where anything stands. Today 25 PDFs wait in \n{Boox/Review} in no order, and \n{p} finds only the work that has a folder. This week I spent no time on the book.
 
-% Review: “so now that we are at it I have several other things that come to my mind that I'm very bad at currently so we just started again trying to use the Apple reminders …”
-The same holds for the small things. \n{Reminders} holds 14 open reminders, six of them late, and a snoozed reminder drops out of my sight. Two things have no reminder at all: the razor blades that never arrived, and a reply on Twitter to Onyx that is three weeks old\here[Reminders join the plan][The plan now covers how a next step reaches me, through Apple Reminders.]. My inbox was in the same state until the side pane gave it a queue: items arrive, wait for me, get handled, and close. \n{para} applies that queue to the rest of my work.
+The same holds for the small things. \n{Reminders} holds 14 open reminders, six of them late, and a snoozed reminder drops out of my sight.
+% Review: “these were for you to create not to add to the report”
+ My inbox was in the same state until the side pane gave it a queue: items arrive, wait for me, get handled, and close. \n{para} applies that queue to the rest of my work.
 
 \section{The names}
 
-% Review: “although this is the source of these three words then our own understanding is different right so I think this needs some kind of modification”
-% Review: “… we call them project which is not necessary what the power calls them project para has a different definition for those that are something with a specific deadline which is not how I work … we have to come up with this naming because otherwise it's confusing …”
-Tiago Forte's PARA method~\cite{para} sorts everything into projects, areas, resources, and archives. Forte's project has an outcome and a deadline, and it goes to the archive once done. Most of what I call a project is different: I build it, it has files and usually a repo, and it runs for as long as I keep working on it. Both kinds need my attention, so they need two names. My proposal\here[two kinds, two names][Forte's project and mine get two names: an errand ends, a build runs.]:
+Tiago Forte's PARA method~\cite{para} sorts everything into projects, areas, resources, and archives. Forte's project has an outcome and a deadline, and it goes to the archive once done. % Review: “project / that's why I initially we had a split in projects and tech projects because I called my stuff project and I don't want to call thiago stuff project so his stuff is going to be called something else …”
+% Review: “I don't like this word with our other options / I think these are commitments”
+What I call a project is different: I build it, it has files and usually a repo, and it runs for as long as I keep working on it. The word project stays with mine, as it did when the vault split projects from tech projects, and Forte's kind gets a name of its own:
 \begin{itemize}
-  \item A \textbf{build} is something I make, with files: the book, \n{AlfBOT}, the radio. It has no end date.
-  \item An \textbf{errand} is Forte's project: a trip, a court hearing, a visa. It ends, and then it goes to the archive.
-  \item An \textbf{area} and a \textbf{resource} keep Forte's meaning. Builds and errands both belong to an area.
+  \item A \textbf{project} is something I make, with files: the book, \n{AlfBOT}, the radio. It has no end date.
+  \item A \textbf{commitment} is something I have to get done once: a trip, a court hearing, a visa. It ends, and then it goes to the archive. The other names we weighed were errand, task, chore, and obligation.
+  \item An \textbf{area} and a \textbf{resource} keep Forte's meaning. Projects and commitments both belong to an area.
 \end{itemize}
-% Review: “this is definitely around on a document I'm not entirely sure this is around for a project so this is the distinction I wanted to make … project is me and sitting on the computer with the one of the harnesses on and then creating content right so these are I think two distinct things …”
-A build moves in two ways\here[round vs session][A round belongs to a document; a build moves by sessions.]. A \textbf{session} is one sitting at the computer, with \n{Claude Code} or \n{Codex}, that changes the build, and the project note's log records it. A \textbf{round} belongs to a document: Claude writes it, I read it on the Boox and dictate notes, and Claude takes them in. The revision table records each round. Today the documents explain the build to me, and its next step comes from the sessions alone.
-% Review: “I don't know the meaning of this word what is the board who introduced the board are we introducing a board? / is this connected to the kanban boards? …”
-The \textbf{list} is every build and errand on one screen, one row each\here[board is now list][The word board is gone: the list is one table, one row per item, with no kanban columns.]. The \textbf{queue} is what waits on me now: documents to read, reminders, and replies.
+A project moves in two ways. A \textbf{session} is one sitting at the computer, with \n{Claude Code} or \n{Codex}, that changes the project, and the project note's log records it. A \textbf{round} belongs to a document: Claude writes it, I read it on the Boox and dictate notes, and Claude takes them in. The revision table records each round. Today the documents explain the project to me, and its next step comes from the sessions alone.
+The \textbf{list} is every project and commitment on one screen, one row each. The \textbf{queue} is what waits on me now: documents to read, reminders, and replies.
 
 \section{The picture}
 
-% Review: “repos, revision tables” — “this is confusing I thought these are two different things one is a project repo with the files and software and the other one is going to be a documentation or a lesson …”
-% Review: “Boox/Review” — “… how is this box connected to me in the terminal … so far this documents I don't believe have fed the project back for moving on to the next stage so is this something that you're proposing …”
-On the left are the four places where my work already lives. \n{para} reads them and shows the list, one item, or the queue. I ask it in the terminal, and \n{AlfBOT} asks it for me. The next step that waits on me goes into \n{Reminders}, so my phone tells me. Each session writes back to the note, and each round writes back a revision\here[repos apart from documents][Repos and documents are two sources; a round closes with a line in the build's log, which is new.]. The last arrow is a proposal: a round that closes adds one line to the build's log, so what I learnt from a document moves the build.
+On the left are the four places where my work already lives. \n{para} reads them and shows the list, one item, or the queue. I ask it in the terminal, and \n{AlfBOT} asks it for me. The next step that waits on me goes into \n{Reminders}, so my phone tells me. Each session writes back to the note, and each round writes back a revision. The last arrow is a proposal: a round that closes adds one line to the project's log, so what I learnt from a document moves the project.
 
 \begin{center}
 \begin{tikzpicture}[font=\sffamily\small,
@@ -79,14 +75,11 @@ On the left are the four places where my work already lives. \n{para} reads them
 
 \section{A first look}
 
-% Review: “why do we have numbers now if we already have keys … we need a project through the key so regardless of the position on the table we can always use the same key to inquire about the specific project?”
-% Review: “14 Nov” — “should this read one day ago 1 hour ago 1 week ago and so on … you don't reason with your reason with you know relative references right like yesterday two days ago and so on”
-% Review: “… some sort of I don't know progress bar but progress bar requires to know how far you are … them GitHub interface with those boxes showing you what you've done when … on the anki cards where it tells you when you last practice something …”
-Like \n{spark}, \n{para} is one command with subcommands. \texttt{para list} prints the list, and \texttt{para show bot} opens one item by its key\here[keys; 2 days ago][Items are called by their key, which never moves, and times read 2 days ago, not 14 Nov.], which stays the same wherever the row falls. Times are relative, such as 2 days ago. The last column shows the past eight weeks, one mark per week, \texttt{\#} for a week with a session and \texttt{.} for one without, as GitHub's contribution grid and Anki's last review do\here[activity, not progress][A strip of recent weeks replaces the progress bar, since a build has no end to measure against.].
+Like \n{spark}, \n{para} is one command with subcommands. \texttt{para list} prints the list, and \texttt{para show bot} opens one item by its key, which stays the same wherever the row falls. Times are relative, such as 2 days ago. The first line counts everything, so the size of my work shows in the terminal at a glance. The last column shows the past eight weeks, one mark per week, \texttt{\#} for a week with a session and \texttt{.} for one without, as GitHub's contribution grid and Anki's last review do.
 
 \begin{Verbatim}[fontsize=\footnotesize]
 $ para list
-  31 builds  13 errands  25 to read  14 reminders, 6 late
+  31 projects  13 commitments  25 to read  14 reminders, 6 late
 
   key   item                  touched        next                     8 weeks
 * bk    book                  8 days ago     next chapter             ###.##..
@@ -97,23 +90,19 @@ $ para list
 
 \section{What others do}
 
-% Review: “next action for every project” — “I think we already have this”
-% Review: “weekly review” — “I think this is what we are trying to build right now”
-David Allen's \textit{Getting Things Done}~\cite{gtd} gives every project a next action, which my notes already carry as a \textbf{Next action} line, and a weekly review that finds the projects without one, which is what \n{para} builds\here[GTD: have it, building it][The next action exists already; the weekly review is what para builds.]. Allen and Forte describe methods. Others have built tools, and three of them come close to \n{para}, each with one thing for me to look at.
-% Review: “question: how do you recommend me consume this resource you write something about it do I check the website do we give it a try and do I check a video …”
-% Review: “… maybe I should have like a next item for me watch these three videos or read these three web pages or check this three links something more specific …”
-% Review: “so should we have like a paragraph or tool that you just mention here such that I have a little bit more context and then I don't know the very high popular video on YouTube explaining how it is working can you do this for me?”
+David Allen's \textit{Getting Things Done}~\cite{gtd} gives every project a next action, which my notes already carry as a \textbf{Next action} line, and a weekly review that finds the projects without one, which is what \n{para} builds. Allen and Forte describe methods. Others have built tools, and three of them come close to \n{para}, each with one thing for me to look at.
 \begin{itemize}
   \item \n{Taskwarrior} keeps tasks in the terminal, each tagged with a project, and prints reports such as \texttt{projects} and \texttt{next}, which sorts open tasks by urgency~\cite{tw}. To look at: the \href{https://taskwarrior.org/docs/30second/}{30-second tutorial}, which shows the commands and their output.
   \item \n{Dataview} is an \n{Obsidian} plugin that turns notes into tables: each note's properties become columns, and the last change is one of them~\cite{dv}. To look at: \href{https://publish.obsidian.md/hub/04+-+Guides\%2C+Workflows\%2C+\%26+Courses/Community+Talks/YT+-+An+Introduction+to+Dataview}{An introduction to Dataview}, the first Obsidian community talk, on video.
   \item \n{cerebro} builds a terminal dashboard from git activity, agent sessions, and a status file per project, close to what \n{para} wants~\cite{cb}. To look at: \href{https://ryanparsley.codeberg.page/cerebro/print.html}{its manual}, one page.
 \end{itemize}
-These three go into my queue as the first items to look at\here[one thing to look at each][Each tool now has a short description and one concrete link to look at.].
+These three go into my queue as the first items to look at.
 
-% Review: “I don't see the references. Where did they go?”
-\begin{thebibliography}{PARA}\raggedright
-\bibitem[PARA]{para} \here[references][The sources are listed at the end, and the text cites them.]Tiago Forte, \textit{The PARA Method: Simplify, Organize, and Master Your Digital Life}, Atria, 2023. \url{https://fortelabs.com/blog/para/}
+\begin{thebibliography}{PMBOK}\raggedright
+\bibitem[PARA]{para} Tiago Forte, \textit{The PARA Method: Simplify, Organize, and Master Your Digital Life}, Atria, 2023. \url{https://fortelabs.com/blog/para/}
 \bibitem[GTD]{gtd} David Allen, \textit{Getting Things Done: The Art of Stress-Free Productivity}, revised edition, Penguin, 2015. \url{https://gettingthingsdone.com/}
+\bibitem[Wirth]{wirth} Niklaus Wirth, \textit{Program development by stepwise refinement}, Communications of the ACM 14(4), 221--227, 1971. \url{https://doi.org/10.1145/362575.362577}
+\bibitem[PMBOK]{pmbok} Project Management Institute, \textit{A Guide to the Project Management Body of Knowledge (PMBOK Guide)}, 7th edition, 2021. \url{https://www.pmi.org/standards/pmbok}
 \bibitem[TW]{tw} Taskwarrior, \textit{30-second tutorial}. \url{https://taskwarrior.org/docs/30second/}
 \bibitem[DV]{dv} SkepticMystic, \textit{An introduction to Dataview}, Obsidian community talk. \url{https://publish.obsidian.md/hub/04+-+Guides\%2C+Workflows\%2C+\%26+Courses/Community+Talks/YT+-+An+Introduction+to+Dataview}
 \bibitem[CB]{cb} Ryan Parsley, \textit{cerebro} manual. \url{https://ryanparsley.codeberg.page/cerebro/print.html}
