@@ -22,3 +22,11 @@ Runs AlfSPARK end to end from any machine (macOS or Termux): powers the Kasa sma
 ## `wget-resume.sh`
 
 Resumable `wget` with stall detection. Re-launches `wget` if the file size hasn't grown for ~30 s, so a silently-frozen download (server stops sending bytes but keeps the connection open) doesn't hang forever.
+
+## `pdf-show`
+
+Opens PDFs side by side on the screen next to the terminal:
+
+    pdf-show a.pdf [b.pdf …]
+
+By day the files open in Skim, which reloads itself on every rebuild. After sunset they open in Preview with View ▸ Use Dark Appearance for PDF, after every Preview document is closed, because Preview names windows by file name alone. Night falls by the time zone's own sunrise and sunset (a NOAA approximation; cities for New York and Rome). The script finds the screen beside the one holding the Terminal, lays the windows in a grid of columns at least ~720 px wide, and prints which app took the files.
