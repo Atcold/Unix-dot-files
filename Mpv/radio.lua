@@ -16,19 +16,32 @@ end
 
 -- The station's name in tg-pane's lettering: each letter is 3 pixels wide and 4 tall,
 -- drawn with half blocks, so a name takes three text rows.
+-- The set covers every letter and digit a station name can carry: letters b, h, j, k, y
+-- and z were missing, and digits were dropped by the filter below, so Jazz24 came out as
+-- JAZZ. Shapes are mine, drawn to match the set.
 local GLYPHS = {
-  a = {".##", "#.#", "###", "#.#"}, c = {"###", "#..", "#..", "###"}, d = {"##.", "#.#", "#.#", "##."},
-  e = {"###", "#..", "##.", "###"}, f = {"###", "#..", "##.", "#.."}, g = {"###", "#..", "#.#", "###"},
-  i = {"###", ".#.", ".#.", "###"}, l = {"#..", "#..", "#..", "###"}, m = {"###", "###", "#.#", "#.#"},
-  n = {"###", "#.#", "#.#", "#.#"}, o = {"###", "#.#", "#.#", "###"}, p = {"###", "#.#", "###", "#.."},
+  a = {".##", "#.#", "###", "#.#"}, b = {"##.", "#.#", "##.", "##."}, c = {"###", "#..", "#..", "###"},
+  d = {"##.", "#.#", "#.#", "##."}, e = {"###", "#..", "##.", "###"}, f = {"###", "#..", "##.", "#.."},
+  g = {"###", "#..", "#.#", "###"}, h = {"#.#", "#.#", "###", "#.#"}, i = {"###", ".#.", ".#.", "###"},
+  j = {"..#", "..#", "#.#", "###"}, k = {"#.#", "#.#", "##.", "#.#"}, l = {"#..", "#..", "#..", "###"},
+  m = {"###", "###", "#.#", "#.#"}, n = {"###", "#.#", "#.#", "#.#"}, o = {"###", "#.#", "#.#", "###"}, p = {"###", "#.#", "###", "#.."},
   q = {"###", "#.#", "###", "..#"}, r = {"###", "#.#", "##.", "#.#"}, s = {"###", "#..", "..#", "###"},
   t = {"###", ".#.", ".#.", ".#."}, u = {"#.#", "#.#", "#.#", "###"}, v = {"#.#", "#.#", "#.#", ".#."},
-  w = {"#.#", "#.#", "###", "###"}, x = {"#.#", ".#.", ".#.", "#.#"}, [" "] = {"...", "...", "...", "..."},
+  w = {"#.#", "#.#", "###", "###"}, x = {"#.#", ".#.", ".#.", "#.#"}, y = {"#.#", "#.#", ".#.", ".#."},
+  z = {"###", "..#", ".#.", "###"}, [" "] = {"...", "...", "...", "..."},
+  ["0"] = {"###", "#.#", "#.#", "###"}, ["1"] = {".#.", "##.", ".#.", "###"}, ["2"] = {"##.", "..#", ".#.", "###"},
+  ["3"] = {"###", "..#", "..#", "###"}, ["4"] = {"#.#", "#.#", "###", "..#"}, ["5"] = {"###", "#..", "..#", "###"},
+  ["6"] = {"###", "#..", "###", "#.#"}, ["7"] = {"###", "..#", ".#.", ".#."}, ["8"] = {"###", "#.#", "###", "#.#"},
+  ["9"] = {"###", "#.#", "###", "..#"},
 }
 local HALF = { ["##"] = "█", ["#."] = "▀", [".#"] = "▄", [".."] = " " }
 
+-- S and Z, and 0 and O, come out alike at three cells wide, and 2 is close enough to Z
+-- that a name would read JAZZZ4: a space goes in wherever letters meet digits, so
+-- Jazz24 draws as JAZZ 24.
 local function blocky(word)
-  word = word:lower():gsub("[^%a ]", "")
+  word = word:lower():gsub("[^%a%d ]", "")
+  word = word:gsub("(%a)(%d)", "%1 %2"):gsub("(%d)(%a)", "%1 %2")
   local rows = { string.rep(".", 4 * #word - 1) }
   for r = 1, 4 do
     local parts = {}
@@ -49,10 +62,12 @@ end
 -- used for its banner and for the piece on the status line.
 local COLOURS = { "8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5" }
 
-local function status(hex)
-  local r, g, b = tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16)
+local shown, colour = "", COLOURS[1]   -- the last real piece, and the current station's colour
+
+local function status()
+  local r, g, b = tonumber(colour:sub(1, 2), 16), tonumber(colour:sub(3, 4), 16), tonumber(colour:sub(5, 6), 16)
   mp.set_property("term-status-msg", string.format(
-    "\27[38;2;%d;%d;%dm♪ ${metadata/by-key/icy-title}\27[0m  \27[2m${time-pos}  ·  vol ${volume}%%\27[0m", r, g, b))
+    "\27[38;2;%d;%d;%dm♪ %s\27[0m  \27[2m${time-pos}  ·  vol ${volume}%%\27[0m", r, g, b, shown))
 end
 
 local pending = nil
@@ -65,7 +80,8 @@ mp.register_event("file-loaded", function()
   local count = mp.get_property_number("playlist-count", 1)
   local name = mp.get_property("playlist/" .. (pos - 1) .. "/title") or mp.get_property("media-title", "")
   pending = { name = name, pos = pos .. "/" .. count, colour = COLOURS[(pos - 1) % #COLOURS + 1] }
-  status(pending.colour)
+  colour, shown = pending.colour, pending.name
+  status()
 end)
 
 local function piece(title)
@@ -101,6 +117,8 @@ end)
 -- through stations logs nothing. The log is a tab-separated file in the XDG data folder.
 local LOG = (os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")) .. "/radio/log.tsv"
 local timer = nil
+local watching = nil   -- {station, title} on the 30 s watch, and the piece printed last
+local logged = nil     -- {station, title} of the last row, so a piece is written once
 
 local function log(station, title)
   os.execute("mkdir -p '" .. LOG:match("(.*)/") .. "'")
@@ -112,11 +130,19 @@ local function log(station, title)
   f:close()
 end
 
-local function listen(title)
-  if timer then timer:kill() end
+local function on_air()
   local pos = mp.get_property_number("playlist-pos", 0)
-  local station = mp.get_property("playlist/" .. pos .. "/title") or ""
-  timer = mp.add_timeout(30, function() log(station, title) end)
+  return mp.get_property("playlist/" .. pos .. "/title") or ""
+end
+
+local function listen(station, title)
+  if timer then timer:kill() end
+  watching = { station = station, title = title }
+  timer = mp.add_timeout(30, function()
+    if logged and logged.station == station and logged.title == title then return end
+    logged = watching
+    log(station, title)
+  end)
 end
 
 -- Venice double-encodes its StreamTitle (UTF-8 bytes encoded as UTF-8 again),
@@ -132,6 +158,19 @@ local function unmangle(s)
     if cp >= 128 and cp <= 255 then return string.char(cp) end
     return b
   end))
+end
+
+-- Radio Swiss announces itself between pieces and sends that announcement as the title:
+-- "Radio Swiss Classic - www.radioswissclassic.ch". A title that names its own station or
+-- carries a URL is a station banner rather than a piece, so it gets no line and no log row.
+-- The piece around a banner keeps its own 30 s watch, and mpv then announces that piece
+-- again; a title repeating the piece on watch is the same piece coming back, so it is
+-- ignored too, and each piece prints and logs once.
+local function banner(station, title)
+  local t = title:lower():gsub("^%s+", "")
+  local name = station:lower():gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
+  if t:find("^" .. name) then return true end
+  return t:find("www%.") ~= nil or t:find("https?://") ~= nil
 end
 
 -- c: channels menu. A python probe reads each stream's icy StreamTitle chunk with
@@ -265,11 +304,19 @@ mp.add_key_binding(">", "station-next", function()
   mp.set_property("playlist-pos", (mp.get_property_number("playlist-pos", 0) + 1) % n)
 end)
 
-mp.register_event("end-file", function() if timer then timer:kill() end end)
+mp.register_event("end-file", function()
+  if timer then timer:kill() end
+  watching = nil   -- a new file announces its piece again, even the same one
+end)
 
 mp.observe_property("metadata/by-key/icy-title", "string", function(_, title)
   if not title or title == "" then return end
   title = unmangle(title)
-  listen(title)
+  local station = on_air()
+  if banner(station, title) then return end
+  if watching and watching.station == station and watching.title == title then return end
+  listen(station, title)
+  shown = title   -- the bottom line follows the real pieces only, so a banner leaves it alone
+  status()
   if pending then table.insert(titles, title) else piece(title) end
 end)
