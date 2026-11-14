@@ -10,7 +10,7 @@
 # With no role it asks, offering what uname and $PREFIX suggest. A run with no terminal to
 # answer on gets the usage and a non-zero exit, so a pipeline never sits on a question.
 
-here="$(pwd)"
+here="$(cd "$(dirname "$0")" && pwd)"   # this folder, however the script was started
 ROLE="" BOOT=no YES=no
 
 usage() {
