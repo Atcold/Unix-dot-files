@@ -6,6 +6,7 @@
 - One concern per commit. Split unrelated changes.
 - A finished code change ends documented (repo `CLAUDE.md`, the spec, or a note) and committed; don’t stop at a dirty tree and ask.
 - But I am the tester: for anything I have to try (config, bindings, scripts, apps), apply it, restart what needs restarting, tell me what to try, and commit only after my OK. No self-checks of your own fix.
+- A clear bug fix (a layout glitch, a crash) is committed and pushed at once, without announcing it.
 - One commit per theme, amended until the theme is done, then pushed; pull on the other Mac when it’s reachable.
 - No separate `git status` after `git add`: `git add <files> && git commit -m …`. Never chain `commit` and `push` into one hidden command.
 - Tool repos hold tools only: none of my data, real paths, hosts or names; examples use placeholders. `git grep` for my identifiers before committing.
