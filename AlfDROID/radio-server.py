@@ -3,7 +3,7 @@
 
 Stations come from ~/.settings/Mpv/radio.m3u, the same file the `radio` alias plays on
 the Macs. Each station that is on runs one ffmpeg that decodes the upstream and
-republishes it as a uniform 128k MP3 mount at http://<host>:8000/<slug>.mp3, so a
+republishes it as a uniform 128k MP3 mount at http://<host>:8001/<slug>.mp3, so a
 listener's player only ever sees plain MP3 at one bitrate whatever the station sends.
 A supervisor restarts ffmpeg when a station's stream drops.
 
@@ -41,7 +41,7 @@ CONFIG = STATE / "icecast.xml"
 ENABLED = STATE / "enabled.json"
 LOGTSV = STATE / "log.tsv"
 
-ICECAST_PORT = 8000
+ICECAST_PORT = 8001
 WEB_PORT = 8080
 UA = "AlfDROID-radio/1.0 (Termux)"
 
