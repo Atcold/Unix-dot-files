@@ -145,74 +145,54 @@ local function listen(station, title)
   end)
 end
 
--- Venice double-encodes its StreamTitle (UTF-8 bytes encoded as UTF-8 again),
--- so accents arrive mangled: undo it by decoding two-byte sequences once more,
--- only when the tell-tale Ã (0xC3 0x83) appears in the string. Venice also
--- trails a {+info: site} advertisement onto some titles: that goes too.
-local function unmangle(s)
-  s = (s:gsub("%s*{%+info:[^}]*}", ""))
-  if not s:find("\195\131", 1, true) then return s end
-  return (s:gsub("[\194\195][\128-\191]", function(b)
-    local c1, c2 = b:byte(1, 2)
-    local cp = (c1 - 192) * 64 + (c2 - 128)
-    if cp >= 128 and cp <= 255 then return string.char(cp) end
-    return b
-  end))
+-- The rules that decide what a piece is live in radio_core.py, shared with the phone's
+-- server so both boxes agree: it undoes the double encoding Venice sends, drops the
+-- {+info: site} advertisement, and calls a station's own announcement a banner. One
+-- short-lived python3 per title and per menu refresh, against a title every few minutes.
+local function core_path()
+  local p = os.getenv("RADIO_CORE")
+  if p and p ~= "" then return p end
+  return mp.find_config_file("radio_core.py") or (os.getenv("HOME") .. "/.settings/Radio/radio_core.py")
 end
 
--- Radio Swiss announces itself between pieces and sends that announcement as the title:
--- "Radio Swiss Classic - www.radioswissclassic.ch". A title that names its own station or
--- carries a URL is a station banner rather than a piece, so it gets no line and no log row.
--- The piece around a banner keeps its own 30 s watch, and mpv then announces that piece
--- again; a title repeating the piece on watch is the same piece coming back, so it is
--- ignored too, and each piece prints and logs once.
-local function banner(station, title)
-  local t = title:lower():gsub("^%s+", "")
-  local name = station:lower():gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
-  if t:find("^" .. name) then return true end
-  return t:find("www%.") ~= nil or t:find("https?://") ~= nil
+local CORE, warned = core_path(), false
+local utils = mp.utils or require "mp.utils"   -- mpv 0.42 keeps these functions in the module only
+
+local function ask_core(args, stdin)
+  local cmd = { "python3", CORE }
+  for _, a in ipairs(args) do cmd[#cmd + 1] = a end
+  local r = utils.subprocess({
+    args = cmd, stdin_data = stdin or "", capture_stdout = true,
+    playback_only = false,
+  })
+  local answer = r and r.status == 0 and utils.parse_json(r.stdout or "")
+  if not answer and not warned then
+    warned = true
+    say(dim("radio_core.py unreachable: showing titles as they come"))
+  end
+  return answer
 end
 
--- c: channels menu. A python probe reads each stream's icy StreamTitle chunk with
--- all stations sniffed concurrently (~4 s). It previews without switching;
--- <  > then moves to the station you picked.
-local PY_SNIFF = [[
-import sys, threading, urllib.request, re
-def sniff(i, url, out):
-    try:
-        r = urllib.request.urlopen(urllib.request.Request(url, headers={
-            "User-Agent": "AlfDROID radio", "Icy-MetaData": "1"}), timeout=4)
-        intv = int(r.headers.get("icy-metaint", "0") or 0)
-        title = ""
-        if intv:
-            for _ in range(3):
-                r.read(intv)
-                ln = r.read(1)
-                if not ln:
-                    break
-                blob = r.read(ln[0] * 16).rstrip(b"\0").decode("utf-8", "replace")
-                m = re.search(r"StreamTitle='(.*?)';", blob) or re.search(r"StreamTitle='([^']*)'", blob)
-                if m and m.group(1).strip():
-                    title = m.group(1).strip()
-                    break
-        r.close()
-        if not title:
-            h = urllib.request.urlopen(urllib.request.Request(url, method="HEAD",
-                headers={"User-Agent": "AlfDROID radio"}), timeout=3)
-            title = (h.headers.get("icy-title") or "").strip()
-        out[i - 1] = title
-    except Exception:
-        pass
-urls = sys.argv[1:]
-out = [""] * len(urls)
-ts = [threading.Thread(target=sniff, args=(i, u, out), daemon=True) for i, u in enumerate(urls, 1)]
-for t in ts:
-    t.start()
-for t in ts:
-    t.join(6)
-for i, t in enumerate(out, 1):
-    print(f"{i}\t{t}")
-]]
+-- One path for a title from any source: clean it, drop the station's own announcements,
+-- and ignore the announcement mpv repeats after a banner. Without python3 the stream is
+-- unaffected, so the raw title stays on screen rather than nothing.
+local function new_title(raw)
+  if not raw or raw == "" then return end
+  local station = on_air()
+  local answer = ask_core({ "clean", station }, raw)
+  local title, is_banner = raw, false
+  if answer then title, is_banner = answer.title or "", answer.banner and true or false end
+  if is_banner or title == "" then return end
+  if watching and watching.station == station and watching.title == title then return end
+  listen(station, title)
+  shown = title
+  status()
+  if pending then table.insert(titles, title) else piece(title) end
+end
+
+-- c: channels menu. The core reads each stream's icy StreamTitle chunk, all stations at
+-- once (~1 s for eight). It previews without switching; <  > then moves to the station
+-- you picked.
 
 -- Stations are picked by code: 1-8 for the first eight, then letters (skipping
 -- keys this script or mpv needs). Beyond that stations are <  > only. The menu
@@ -252,27 +232,18 @@ local function channels()
   io.write("\27[?1049h\27[2J\27[H")
   io.flush()
   say(dim("checking " .. n .. " channels…"))
-  local urls = {}
-  for i = 0, n - 1 do urls[i + 1] = mp.get_property("playlist/" .. i .. "/filename", "") end
-  local q = {}
-  for i, u in ipairs(urls) do q[i] = string.format("%q", u) end
-  local py = os.tmpname()
-  local f = io.open(py, "w")
-  f:write(PY_SNIFF)
-  f:close()
-  local out = io.popen("python3 " .. py .. " " .. table.concat(q, " ") .. " 2>/dev/null")
-  local text = out and out:read("a") or ""
-  if out then out:close() end
-  os.remove(py)
-  local titles_by = {}
-  for line in text:gmatch("[^\n]+") do
-    local i, t = line:match("^(%d+)\t(.*)$")
-    if i and t then titles_by[tonumber(i)] = unmangle(t) end
+  local args = { "sniff" }
+  for i = 0, n - 1 do
+    args[#args + 1] = mp.get_property("playlist/" .. i .. "/title") or ""
+    args[#args + 1] = mp.get_property("playlist/" .. i .. "/filename", "")
   end
+  local answer = ask_core(args)
+  local rows = answer and answer.titles or {}
   for i = 1, n do
     local name = mp.get_property("playlist/" .. (i - 1) .. "/title") or "?"
     local colour = COLOURS[(i - 1) % #COLOURS + 1]
-    local title = titles_by[i]
+    local row = rows[i]
+    local title = row and row.title
     say((i == pos and rgb("b3de69", "►") or " ") .. " " .. rgb(colour, string.format("%3s", code_for(i) or "") .. "  " .. name) ..
         dim("   ") .. (title and title ~= "" and title or dim("—")))
   end
@@ -309,14 +280,19 @@ mp.register_event("end-file", function()
   watching = nil   -- a new file announces its piece again, even the same one
 end)
 
-mp.observe_property("metadata/by-key/icy-title", "string", function(_, title)
-  if not title or title == "" then return end
-  title = unmangle(title)
-  local station = on_air()
-  if banner(station, title) then return end
-  if watching and watching.station == station and watching.title == title then return end
-  listen(station, title)
-  shown = title   -- the bottom line follows the real pieces only, so a banner leaves it alone
-  status()
-  if pending then table.insert(titles, title) else piece(title) end
+mp.observe_property("metadata/by-key/icy-title", "string", function(_, title) new_title(title) end)
+
+-- Audiocdn, which serves Jazz24, leaves StreamTitle empty in most metadata chunks and
+-- names the piece in a single one, and mpv can miss that chunk: the property then lags by
+-- about a minute. The poll reads the stream the way the phone's server does, so the pane
+-- catches up by itself. mpv's property stays the fast path, and new_title decides once
+-- between the two, since both end in the same watch.
+mp.add_periodic_timer(20, function()
+  if modal or mp.get_property_bool("pause", false) then return end
+  local pos = mp.get_property_number("playlist-pos", 0)
+  local url = mp.get_property("playlist/" .. pos .. "/filename", "")
+  if url == "" then return end
+  local answer = ask_core({ "sniff", on_air(), url })
+  local row = answer and answer.titles and answer.titles[1]
+  if row and not row.banner then new_title(row.title) end
 end)

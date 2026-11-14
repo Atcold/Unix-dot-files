@@ -1,0 +1,6 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Run by Termux:Boot when the phone starts: bring the radio service up, so the page and
+# whatever was switched on last time are there without anyone touching the phone.
+# Termux:Boot has to be installed, and the screen lock set to None, or Android keeps the
+# apps asleep until someone unlocks. install.sh --boot puts this in ~/.termux/boot.
+$HOME/.settings/Radio/radio-server.py up

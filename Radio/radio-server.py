@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """Serve my radio stations as icecast mounts, with a web page to switch them on and off.
 
-Stations come from ~/.settings/Mpv/radio.m3u, the same file the `radio` alias plays on
-the Macs. Each station that is on runs one ffmpeg that decodes the upstream and
-republishes it as a uniform 128k MP3 mount at http://<host>:8001/<slug>.mp3, so a
-listener's player only ever sees plain MP3 at one bitrate whatever the station sends.
-A supervisor restarts ffmpeg when a station's stream drops.
+Stations come from radio.m3u in this folder, the file the `radio` alias plays on the Macs;
+$RADIO_M3U names another. Each station that is on runs one ffmpeg that decodes the upstream
+and republishes it as a uniform 128k MP3 mount at http://<host>:8001/<slug>.mp3, so a
+listener's player only ever sees plain MP3 at one bitrate whatever the station sends. A
+supervisor restarts ffmpeg when a station's stream drops.
 
-Built for Termux on AlfDROID: `pkg install ffmpeg icecast python`, then
-`radio-server.py up` starts icecast, the relays and a control page on port 8080.
-Open http://alfdroid:8080/ on the tailnet to switch stations and copy their mount
-URLs into a player such as Evermusic. State, icecast config and logs live under
-~/.local/share/radio/; station logos are fetched once into logos/ there, and dropping
-your own logos/<slug>.png overrides the fetched one. Pieces land in log.tsv there,
-in the same shape radio.lua writes on the Macs: date, time, station, piece, once a
-piece has played 30 s with a listener connected.
+radio_core.py in this folder holds the rules both players share. It reads the icy
+StreamTitle chunks, undoes the encoding the stations get wrong, and tells a station's own
+announcement apart from a piece, so a banner is never logged as something I listened to and
+a piece I hear several times stays one row.
+
+Built for Termux on AlfDROID, where install.sh in this folder installs ffmpeg, icecast and
+python and links this file onto the PATH. `radio-server.py up` starts icecast, the relays
+and a control page on port 8080. Open http://alfdroid:8080/ on the tailnet to switch
+stations and copy their mount URLs into a player such as Evermusic. State, icecast config
+and logs live under ~/.local/share/radio/; station logos are fetched once into logos/
+there, and dropping your own logos/<slug>.png overrides the fetched one. Pieces land in
+log.tsv there, in the same shape radio.lua writes on the Macs: date, time, station, piece,
+once a piece has played 30 s with a listener connected.
 """
 
 import base64
@@ -32,7 +37,24 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-M3U = Path("~/.settings/Mpv/radio.m3u").expanduser()
+try:
+    import radio_core
+except ImportError:  # a lone copy of this file: $RADIO_CORE names where the core lives
+    sys.path.insert(0, str(Path(os.getenv("RADIO_CORE",
+                                          "~/.settings/Radio/radio_core.py")).expanduser().parent))
+    import radio_core
+
+
+def m3u_path():
+    """The playlist: $RADIO_M3U if set, else the copy install.sh links into mpv's
+    config folder, else the file in this folder, which is where the Macs keep it."""
+    for cand in (os.getenv("RADIO_M3U"), "~/.config/mpv/radio.m3u", "~/.settings/Radio/radio.m3u"):
+        if cand and Path(cand).expanduser().is_file():
+            return Path(cand).expanduser()
+    return Path("~/.settings/Radio/radio.m3u").expanduser()
+
+
+M3U = m3u_path()
 STATE = Path("~/.local/share/radio").expanduser()
 LOGDIR = STATE / "logs"
 LOGOS = STATE / "logos"
@@ -43,12 +65,12 @@ LOGTSV = STATE / "log.tsv"
 
 ICECAST_PORT = 8001
 WEB_PORT = 8080
-UA = "AlfDROID-radio/1.0 (Termux)"
+UA = radio_core.UA
 
 # ColorBrewer Set3 in the order radio.lua uses, without the yellow and the grey.
 COLOURS = ["8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5"]
-WHITE_LOGOS = {"venice-classic-radio"}   # white-on-transparent art needs a dark tile
-DARK_INK_LOGOS = {"classic-fm"}          # red-and-black art needs the light tile
+WHITE_LOGOS = {"venice-classic-radio"}   # white-on-transparent art, sits on the dark default
+DARK_INK_LOGOS = {"rai-radio-classica", "wqxr"}   # black/olive ink needs the light tile
 
 # Where to fetch each station's logo from, tried in order: an official brand image
 # (preferably SVG), then the station homepage's og:image, then DuckDuckGo's icon for
@@ -89,22 +111,6 @@ def load_stations():
     for i, st in enumerate(stations):
         st["colour"] = COLOURS[i % len(COLOURS)]
     return stations
-
-
-def fix_mojibake(s):
-    """Undo double-encoded UTF-8: Venice sends StreamTitle as UTF-8 bytes encoded
-    as UTF-8 again, so 'Félicien' arrives as 'FÃ©licien'. Decode once more when the
-    tell-tale 'Ã' shows up and the second decode comes out clean. Venice also
-    trails a {+info: site} advertisement onto some titles: that goes too."""
-    s = re.sub(r"\s*\{\+info:[^}]*\}", "", s)
-    if "Ã" in s:
-        try:
-            fixed = s.encode("latin-1", "strict").decode("utf-8", "strict")
-            if "Ã" not in fixed and "\ufffd" not in fixed:
-                return fixed
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            pass
-    return s
 
 
 def encoder():
@@ -289,7 +295,9 @@ class Radio:
         """Follow the station's own stream to read its icy titles: fetch with
         Icy-MetaData and discard the audio, keeping only the StreamTitle updates.
         ffmpeg's icecast output here is a plain source and cannot carry metadata,
-        so this side reader is what feeds both the log and the page."""
+        so this side reader is what feeds both the log and the page. radio_core reads
+        each chunk and decides what it means, so a station's own announcement between
+        pieces never becomes a row here either."""
         st = next(s for s in self.stations if s["slug"] == slug)
         last = ""
         while True:
@@ -301,9 +309,9 @@ class Radio:
                     st["url"], headers={"User-Agent": UA, "Icy-MetaData": "1"}), timeout=20)
                 interval = int(r.headers.get("icy-metaint", "0") or 0)
                 if not interval:  # no inline chunks; some stations only set icy-title in the header
-                    title = fix_mojibake((r.headers.get("icy-title") or "").strip())
+                    title, banner = radio_core.clean_title(st["name"], r.headers.get("icy-title") or "")
                     r.close()
-                    if title and title != last:
+                    if title and title != last and not banner:
                         last = title
                         self.note_title(slug, title)
                     time.sleep(30)
@@ -318,9 +326,8 @@ class Radio:
                     if not first:
                         break
                     blob = r.read(first[0] * 16).rstrip(b"\0").decode("utf-8", "replace")
-                    m = re.search(r"StreamTitle='([^']*)'", blob)
-                    title = fix_mojibake((m.group(1) if m else "").strip())
-                    if title and title != last:
+                    title, banner = radio_core.clean_title(st["name"], radio_core.parse_stream_title(blob))
+                    if title and title != last and not banner:
                         last = title
                         self.note_title(slug, title)
             except Exception:
@@ -347,8 +354,11 @@ class Radio:
 
     def log_loop(self):
         """Mirror radio.lua's rule: a piece is logged once it held the mount for 30 s
-        while a listener was connected, so skipping through stations logs nothing."""
+        while a listener was connected, so skipping through stations logs nothing. A
+        station announces the same piece several times, so the last row per station is
+        kept and a piece that comes back is not written twice."""
         watching = {}  # slug -> [title, since, logged], the piece being watched
+        logged = {}    # slug -> the last title written, so one piece is one row
         while True:
             stats = self.stats()
             for st in self.stations:
@@ -362,7 +372,9 @@ class Radio:
                         continue
                     if not cur[2] and time.time() - cur[1] >= 30:
                         cur[2] = True
-                        self.log_line(st["name"], title)
+                        if logged.get(slug) != title:
+                            logged[slug] = title
+                            self.log_line(st["name"], title)
                 except Exception:
                     continue
             time.sleep(5)
@@ -445,15 +457,15 @@ stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="tru
 
 CSS = """
 body{background:#000;color:#eaeaea;font-family:"Cascadia Code",ui-monospace,Menlo,monospace;
-margin:24px auto;max-width:640px;padding:0 16px 130px}
+margin:24px auto;max-width:640px;padding:78px 16px 24px}
 header{display:flex;align-items:center;gap:12px;margin-bottom:4px}
 h1{font-size:20px;font-weight:600;margin:0;flex:1}
 .bar{display:flex;align-items:center;gap:14px;font-size:13px;color:#9a9a9a;margin-bottom:16px;flex-wrap:wrap}
 .mrow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid #1c1c1c}
 .mrow.playing{background:#0d0d0d;border-left:3px solid;padding-left:3px}
-img.logo{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#e8e8e8;flex:none;padding:3px;box-sizing:border-box}
+img.logo{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#101010;flex:none;padding:3px;box-sizing:border-box}
 img.raster{background:none;padding:0}
-img.white{background:#101010}
+img.ink{background:#e8e8e8}
 .tile{width:44px;height:44px;border-radius:8px;background:#0d0d0d;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;border:1px solid}
 .text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -470,26 +482,28 @@ h2.pl{font-size:11px;font-weight:400;color:#6f6f6f;margin:8px 0 6px;letter-spaci
 .pwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .pc{font-weight:600;color:#eaeaea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pw{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#player{position:fixed;bottom:0;left:0;right:0;background:#0a0a0a;border-top:1px solid #1c1c1c;
-padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;
+#player{position:fixed;top:0;left:0;right:0;background:#0a0a0a;border-bottom:1px solid #1c1c1c;
+padding:calc(10px + env(safe-area-inset-top)) 10px 10px;display:flex;align-items:center;gap:9px;
 max-width:640px;margin:0 auto;box-sizing:border-box}
-#player button{font-size:17px;padding:6px 12px;border-radius:20px;line-height:0}
+#player button{font-size:17px;padding:6px 10px;border-radius:20px;line-height:0}
 #bar-tgl{border-color:#8dd3c7;color:#8dd3c7}
 #bar-dot{width:12px;height:12px;border-radius:50%;flex:none;background:transparent}
 #bar-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-#bar-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bar-name{display:none}
 #bar-piece{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#vol{width:88px;flex:none;accent-color:#8dd3c7}
+#vol{width:48px;flex:none;accent-color:#8dd3c7}
 #mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:4}
-#menu{position:fixed;left:50%;transform:translateX(-50%);bottom:86px;width:min(640px,calc(100% - 24px));
+#menu{position:fixed;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top));width:min(640px,calc(100% - 24px));
 background:#0a0a0a;border:1px solid #2a2a2a;border-radius:14px;padding:6px 10px;display:none;z-index:5;
-max-height:62vh;overflow-y:auto;box-shadow:0 -6px 24px rgba(0,0,0,.7)}
+max-height:62vh;overflow-y:auto;box-shadow:0 6px 24px rgba(0,0,0,.7)}
+.pdot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid #3a3a3a;background:transparent}
 #pick{border-color:#3a3a3a;font-size:13px;padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:7px;line-height:0}
-#pick-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+#pick-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
+@media(max-width:560px){#bar-text,#bar-dot{display:none}}
 """
 
 JS = r"""
-var snd=null, now=null, want=false, titles={}, enabled=[], COL={};
+var snd=null, now=null, want=false, titles={}, enabled=[], COL={}, lastName=null;
 ST.forEach(function(s){COL[s.name]='#'+s.colour});
 var ICONS={play:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><path d='M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z'/></svg>",
 pause:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><rect x='6' y='4' width='4.5' height='16' rx='1.5'/><rect x='13.5' y='4' width='4.5' height='16' rx='1.5'/></svg>"};
@@ -520,14 +534,21 @@ function mk(){if(!now)return;var st=st_of(now);
   snd.play().catch(function(){});}
 function playRow(slug,ev){if(ev)ev.stopPropagation();
   if(ev&&(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT'))return;
-  menu(0);
-  if(now===slug&&want){want=false;if(snd)snd.pause();fetch('/api/off-all');setBar();
-    setTimeout(refresh,400);return}
+  menu(0);                     // a row tap only ever turns that station on
   now=slug;want=true;
   fetch('/api/select?slug='+slug);setTimeout(refresh,400);
   mk();setBar();}
-function tgl(){if(!now){menu(1);return}
-  want=!want;if(want)mk();else snd.pause();setBar();}
+function offAll(){menu(0);     // ■ is the only way to nothing playing
+  want=false;if(snd)snd.pause();
+  fetch('/api/off-all');setTimeout(refresh,400);setBar();}
+function lastSlug(){           // queue head names the station you last had
+  if(lastName)for(var i=0;i<ST.length;i++)if(ST[i].name===lastName)return ST[i].slug;
+  return ST.length?ST[0].slug:null;}
+function tgl(){                // ▶ means: give me sound back
+  if(!want){if(!now)now=lastSlug();
+    if(!now){menu(1);return}
+    want=true;fetch('/api/select?slug='+now);mk();setBar();return}
+  want=false;if(snd)snd.pause();setBar();}
 function refresh(){
   fetch('/api/status').then(function(r){return r.json()}).then(function(s){
     enabled=[];
@@ -540,6 +561,12 @@ function refresh(){
       else{e.textContent='off';e.className='st'}
     });
     if(now&&enabled.indexOf(now)<0){want=false;if(snd)snd.pause()}
+    if(!now&&enabled.length)now=enabled[0];
+    lastName=(s.recent&&s.recent.length)?s.recent[0].station:lastName;
+    ST.forEach(function(x){var d=rep('dot-'+x.slug);if(d){
+      var on=enabled.indexOf(x.slug)>=0;
+      d.style.background=on?'#'+x.colour:'transparent';
+      d.style.borderColor=on?'#'+x.colour:'#3a3a3a'}});
     var el=rep('played');el.innerHTML='';
     var last=null;
     (s.recent||[]).forEach(function(r){
@@ -577,25 +604,27 @@ def page(radio, host):
         station_list.append({"slug": slug, "name": st["name"], "url": url, "colour": colour})
         logo = LOGOS / (slug + ".img")
         if logo.exists():
-            # Rasters carry their own ground, white-on-transparent SVGs need a dark
-            # tile; everything else sits on the light tile.
-            head = logo.read_bytes()[:4]
+            # Rasters carry their own ground; the tile defaults to dark for white art,
+            # and only dark-ink art gets the light one.
+            magic = logo.read_bytes()[:4]
+            raster = magic[:3] in (b"\x89PN", b"GIF", b"RIFF") or magic[:2] == b"\xff\xd8"
             if slug in DARK_INK_LOGOS:
-                cls = "logo"
+                cls = "logo ink"
             elif slug in WHITE_LOGOS:
-                cls = "logo white"
-            elif head in (b"\x89PNG", b"GIF8", b"\xff\xd8", b"RIFF"):
+                cls = "logo"
+            elif raster:
                 cls = "logo raster"
             else:
-                cls = "logo"
-            art = f'<img class={cls} src="/logo/{slug}" alt="">'
+                cls = "logo ink"
+            art = f'<img class="{cls}" src="/logo/{slug}" alt="">'
         else:
             initials = "".join(w[0] for w in st["name"].split()[:2]).upper()
             art = f'<span class=tile style="border-color:#{colour};color:#{colour}">{initials}</span>'
         menu_rows.append(
             f'<div class=mrow id=row-{slug} onclick="playRow(\'{slug}\',event)">{art}'
             f'<div class=text><span class=name style="color:#{colour}">{st["name"]}</span>'
-            f'<span class=st id=st-{slug}>off</span></div></div>')
+            f'<span class=st id=st-{slug}>off</span></div>'
+            f'<span class=pdot id=dot-{slug} title="on"></span></div>')
     return ("<!doctype html><html><head><meta charset=utf-8>"
             '<meta name=viewport content="width=device-width, initial-scale=1">'
             "<title>AlfDROID radio</title><style>" + CSS + "</style></head><body>"
@@ -611,6 +640,7 @@ def page(radio, host):
               '<circle cx="35" cy="31" r="4.5"/></svg><span id=pick-name>radio</span></button>'
               '<button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">'
               '<path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button>'
+              '<button id=bar-off onclick="offAll()" title="stop"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>'
               '<span id=bar-dot></span>'
               '<span id=bar-text><span id=bar-name>—</span><span id=bar-piece></span></span>'
               '<input type=range id=vol min=0 max=1 step=0.05 value=1 oninput="if(snd)snd.volume=this.value">'

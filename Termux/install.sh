@@ -12,9 +12,12 @@ rm -rf $HOME/.termux/termux.properties $HOME/.termux/colors.properties
 ln -s $(pwd)/termux.properties $HOME/.termux/termux.properties
 ln -s $(pwd)/colors.properties $HOME/.termux/colors.properties
 
-# Termux:Boot runs the scripts in ~/.termux/boot when the phone starts
-rm -rf $HOME/.termux/boot
-ln -s $(pwd)/boot $HOME/.termux/boot
+# Termux:Boot runs the scripts in ~/.termux/boot when the phone starts. Each script is
+# linked from the folder that owns it, so any part of the settings can add a service.
+if [ -L $HOME/.termux/boot ]; then rm -f $HOME/.termux/boot; fi
+mkdir -p $HOME/.termux/boot
+rm -f $HOME/.termux/boot/start-sshd
+ln -s $(pwd)/boot/start-sshd $HOME/.termux/boot/start-sshd
 
 # The terminal font: Cascadia's ExtraLight Nerd Font face with the pinyin patch from
 # Scripts/, as on the Mac. Termux takes one font file and derives bold and italic from it.
