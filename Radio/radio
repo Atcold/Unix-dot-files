@@ -82,12 +82,12 @@ def frame(ip2name, with_events=True):
     out = [f"\033[1mAlfDROID radio\033[0m  {GREY}pid {st['pid']} · recording "
            f"{'on' if st['powered'] else 'OFF'} · {time.strftime('%H:%M:%S')}{R}", ""]
     cols = size().columns
-    nw, rw = (22, 11) if cols >= 80 else (14, 7)   # a phone's width gets narrower columns
+    nw, rw = (22, 11) if cols >= 80 else (14, 10)   # a phone's width gets narrower columns
     room = cols - nw - rw - 6 - 3   # the piece takes the rest, one column short of the edge
-    out.append(f"{DIM}{'station':<{nw}}{'relay':<{rw}}{'tape':>6}  piece (live){R}")
+    out.append(f"{DIM}{'station':<{nw}}{'rec':<{rw}}{'tape':>6}  piece (live){R}")
     for s in st["stations"]:
-        relay = ("live" if s["live"] else "off" if not st["powered"]
-                 else "restarting" if s["enabled"] else "muted")
+        relay = ("● rec" if s["live"] else "○ stopped" if not st["powered"] or not s["enabled"]
+                 else "starting")         # the same words as the page's REC switch
         out.append(f"{rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
                    f"{relay[:rw - 1]:<{rw}}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
@@ -383,7 +383,7 @@ def main(argv):
         for x in st["stations"]:
             if any(q == x["slug"] or q.lower() in x["name"].lower() or q == str(st["stations"].index(x) + 1)
                    for q in rest):
-                state = "live" if x["live"] else "starting" if x["enabled"] else "muted"
+                state = "● rec" if x["live"] else "starting" if x["enabled"] else "○ stopped"
                 say(f"{rgb(x['colour'], x['name'])}  {state}")
     elif cmd in ("up", "down"):
         droid(cmd)
