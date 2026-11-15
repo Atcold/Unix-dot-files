@@ -366,7 +366,7 @@ def main(argv):
             urllib.request.urlopen(f"http://{HOST}:8080/api/on-all", timeout=10).read()
         else:
             urllib.request.urlopen(f"http://{HOST}:8080/api/power?on=0", timeout=10).read()
-        say(f"{GREEN}● recording every station{R}" if api("/api/status")["powered"] else "○ not recording")
+        say(f"{GREEN}● recording every station to tape{R}" if api("/api/status")["powered"] else "○ not recording")
     elif cmd in ("record", "stop"):                 # named stations only
         st = api("/api/status")
         named = [x["slug"] for i, x in enumerate(st["stations"])
