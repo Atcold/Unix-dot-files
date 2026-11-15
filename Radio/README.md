@@ -1,16 +1,19 @@
 # Radio
 
-My stations, from one folder: `radio` plays them in the terminal on the Macs through mpv, and AlfDROID relays them on the tailnet through icecast so a listener plays one plain MP3 URL per station. Both read the same titles and write the same log, because the rules that decide what a piece is live in one file.
+My stations, from one folder: `radio` plays them in the terminal on the Macs through mpv, and AlfDROID relays and records them on the tailnet, so the iPhone listens three minutes behind live out of the droid's tape and rides out a subway run on its buffer. Both read the same titles and write the same log, because the rules that decide what a piece is live in one file.
 
-`radio` prints a header per station with its name in block letters in its own colour and the stream's format, bitrate, sample rate and channels underneath, then a line for each piece. Keys: `1-8` and letters jump to a station, `<` and `>` step, `9` and `0` set the volume, `c` opens the channels menu with what each station is playing now, `space` pauses, `q` quits. A piece that plays 30 s on one station goes to `~/.local/share/radio/log.tsv` as date, time, station and piece.
+`radio` alone, or `radio mpv`, prints a header per station with its name in block letters in its own colour and the stream's format, bitrate, sample rate and channels underneath, then a line for each piece. Keys: `1-8` and letters jump to a station, `<` and `>` step, `9` and `0` set the volume, `c` opens the channels menu with what each station is playing now, `space` pauses, `q` quits. A piece that plays 30 s on one station goes to `~/.local/share/radio/log.tsv` as date, time, station and piece.
 
 ## Files
 
+- **radio**: the command on the Macs. Bare, it plays; `radio status`, `watch`, `log`, `on`, `off`, `start`, `stop`, `up`, `down`, `restart`, `deploy` and `logos` look after the droid's service, and `radio help` lists them.
 - **radio.m3u**: the stations, in the order the codes are handed out.
 - **radio.lua**: the mpv script that owns the pane: header, piece lines, colours, keys, and the log.
 - **mpv.conf**: the `radio` profile, which hides mpv's own messages and loads the script at `~~/radio.lua`.
 - **radio_core.py**: the shared rules, run by the Mac script and imported by the server: it reads the icy `StreamTitle` chunks, undoes the encoding some stations double-apply, drops a station's own announcement between pieces, and decides when a piece has already been written.
-- **radio-server.py**: the AlfDROID service: one ffmpeg per station republishing it as a 128k MP3 mount, a supervisor that restarts it on a drop, and a page on port 8080 to switch stations and copy mount URLs into a player such as Evermusic.
+- **radio-server.py**: the AlfDROID service: one ffmpeg per station re-encoding it to 128 kbit/s MP3 for icecast on :8001 and for a five-minute tape in RAM, a supervisor that restarts it on a drop, and the page and its streams on :8080. Safari plays a station as HLS, 6 s segments cut from the tape, starting three minutes back and buffering up to live; other browsers stream the tape directly. The recording switch starts and stops every relay, which also sleep fifteen minutes after the last listener.
+- **radio-page.html**: the page, read fresh on every request, so a page change ships with `radio deploy` and no restart.
+- **logos-dark**: draws dark versions of the bright station logos and copies them to the droid; `radio logos` runs it.
 - **boot/radio**: the Termux:Boot script that brings the service up when the droid starts.
 - **install.sh**: `./install.sh mac`, `droid` or `all`, with `--boot` for the droid's boot script and `-y` for a scripted run. With no role it asks.
 
