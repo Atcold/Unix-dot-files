@@ -78,6 +78,40 @@ def same_piece(a, b):
     return bool(a and b) and a.get("station") == b.get("station") and a.get("title") == b.get("title")
 
 
+# Words caption_case leaves alone. Rai's captions arrive in capitals and read badly on
+# the page, so caption_case lowercases the line and capitalises each word, except these.
+_FUNCTION = {"in", "per", "e", "di", "del", "della", "a", "con",
+             "van", "von", "de", "la", "il"}     # Italian and English little words
+_KEYS = {"do", "re", "mi", "fa", "sol", "la", "si", "bem", "mag", "min"}   # keys and their abbreviations
+_CATALOG = {"op.": "op.", "n.": "n.", "d": "D", "bwv": "BWV", "k.": "K."}   # catalogue marks, as written
+_ROMAN = re.compile(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$")
+
+
+def caption_case(caption):
+    """Rai's piece captions in normal case: it lowercases the whole line and capitalises
+    each word, then puts back what that would spoil. Little words stay lowercase (a
+    movement name reads "Quartetto in fa min", not "In Fa Min"), so do the Italian key
+    words (si bem mag = B-flat major). Catalogue marks keep the shape they are written
+    in (op. and n. down, the Deutsch D and Bach BWV up, Köchel K. with its capital),
+    Roman numerals go up, and digits and initials come through untouched. The word order
+    is Rai's, which puts the composer's surname first."""
+    words = []
+    for tok in (caption or "").split():
+        if tok.lower() in _CATALOG:                       # match the mark with its period
+            words.append(_CATALOG[tok.lower()])
+            continue
+        m = re.match(r"(.*?)([.,;:]*)$", tok)
+        core, trail = m.group(1), m.group(2)
+        low = core.lower()
+        if low in _FUNCTION or low in _KEYS:
+            words.append(low + trail)
+        elif 2 <= len(core) <= 8 and _ROMAN.fullmatch(low):
+            words.append(core.upper() + trail)
+        else:
+            words.append(low.capitalize() + trail)
+    return " ".join(words)
+
+
 def parse_stream_title(blob):
     """The StreamTitle out of one icy metadata chunk, or "" when the chunk carries none.
     Audiocdn, which serves Jazz24, fills most chunks with StreamTitle='' and names the
@@ -161,6 +195,13 @@ def _selftest():
         ("Rai Radio Classica", "  Friedrich Gulda - Piano Sonata No. 1  ",
          "Friedrich Gulda - Piano Sonata No. 1", False),
     ]
+    caption_cases = [
+        # (Rai caption as it arrives in capitals, expected normal case)
+        ("BEETHOVEN LUDWIG VAN QUARTETTO IN FA MIN OP. 95 QUARTETTO SERIOSO, QUARTETTO EMERSON",
+         "Beethoven Ludwig van Quartetto in fa min op. 95 Quartetto Serioso, Quartetto Emerson"),
+        ("SCHUBERT FRANZ TRIO N. 1 IN SI BEM MAG PER PF, VL E VCL  OP. 99 D 898, CAPUCON R.; CAPUCON G.; BRONFMAN Y.",
+         "Schubert Franz Trio n. 1 in si bem mag per Pf, Vl e Vcl op. 99 D 898, Capucon R.; Capucon G.; Bronfman Y."),
+    ]
     bad = 0
     for station, raw, want_title, want_banner in cases:
         title, banner = clean_title(station, raw)
@@ -176,13 +217,18 @@ def _selftest():
         if got != want:
             bad += 1
             print(f"FAIL chunk {blob!r}: got {got!r}, want {want!r}")
+    for raw, want in caption_cases:
+        got = caption_case(raw)
+        if got != want:
+            bad += 1
+            print(f"FAIL caption {raw!r}\n  got  {got!r}\n  want {want!r}")
     if same_piece({"station": "Jazz24", "title": "A"}, {"station": "Jazz24", "title": "A"}) is False:
         bad += 1
         print("FAIL same_piece: identical rows reported different")
     if same_piece({"station": "Jazz24", "title": "A"}, {"station": "WQXR", "title": "A"}):
         bad += 1
         print("FAIL same_piece: rows from two stations reported the same")
-    print(f"{len(cases) + len(chunks) + 2} checks, {bad} failing")
+    print(f"{len(cases) + len(chunks) + len(caption_cases) + 2} checks, {bad} failing")
     return 1 if bad else 0
 
 

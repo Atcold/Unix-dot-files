@@ -721,7 +721,7 @@ class Radio:
                         return
                     title, banner = radio_core.clean_title(st["name"], now.get("caption") or "")
                     if title and not banner:
-                        self.note_title(RAI_SLUG, title)
+                        self.note_title(RAI_SLUG, radio_core.caption_case(title))
                         seen[0] = max((now.get("expireAt") or 0) / 1000, time.time() + 90)
 
                 client.on_message = on_message
