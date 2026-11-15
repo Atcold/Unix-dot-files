@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="it">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><meta name="color-scheme" content="only light"><title>cucina</title>
+<style>
+:root{color-scheme:only light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#000;font:17px/1.5 system-ui,sans-serif}main{width:min(100%,760px);margin:8vh auto;padding:24px}header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px}h1{font-size:28px;margin:0;font-weight:600;letter-spacing:-1px}small,#count{font-size:13px}input{width:100%;border:1px solid #000;border-radius:10px;background:#fff;color:#000;font:inherit;padding:14px 16px;outline:none}input:focus{outline:1px solid #000}input::placeholder{color:#000;opacity:1}#count{margin:10px 0 20px}#results{list-style:none;margin:0;padding:0}#results a{display:block;text-align:left;width:100%;border-bottom:1px solid #000;background:#fff;color:#000;padding:14px 4px;text-decoration:none}#results a:focus-visible,#results a:hover{outline:1px solid #000}@media(max-width:500px){main{margin:3vh auto;padding:20px}}
+</style>
+<main>
+<header><h1>cucina</h1><small>GialloZafferano</small></header>
+<input id="query" type="search" placeholder="Cosa vuoi cucinare?" autocomplete="off" aria-label="Cerca una ricetta">
+<p id="count" role="status" aria-live="polite">Carico l’indice…</p><ul id="results"></ul>
+</main>
+<script>
+const $=s=>document.querySelector(s);let recipes=[];
+const normal=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+function score(title,query){let total=0;for(const word of query.split(/\s+/).filter(Boolean)){let exact=title.indexOf(word);if(exact>=0){total+=1000-word.length-exact;continue}let position=-1,start=-1;for(const char of word){position=title.indexOf(char,position+1);if(position<0)return -Infinity;if(start<0)start=position}total+=100-(position-start)-start}return total}
+function render(){
+ const query=normal($('#query').value.trim());
+ try{sessionStorage.setItem('cucina-query',$('#query').value)}catch(error){}
+ const matches=recipes.map(r=>({r,score:query?score(r.key,query):0})).filter(x=>x.score>-Infinity).sort((a,b)=>b.score-a.score||a.r.title.localeCompare(b.r.title,'it'));
+ $('#count').textContent=matches.length.toLocaleString('it')+' / '+recipes.length.toLocaleString('it')+' ricette · nomi ricavati dagli indirizzi';$('#results').replaceChildren();
+ for(const {r} of matches.slice(0,80)){let li=document.createElement('li'),link=document.createElement('a');link.textContent=r.title;link.href='/cook?slug='+encodeURIComponent(r.slug);li.append(link);$('#results').append(li)}
+ if(!matches.length)$('#results').textContent='Nessuna ricetta trovata.';
+}
+$('#query').oninput=render;$('#query').onkeydown=e=>{if(e.key==='Enter')$('#results a')?.click();if(e.key==='ArrowDown'){$('#results a')?.focus();e.preventDefault()}};
+$('#results').onkeydown=e=>{const links=[...$('#results').querySelectorAll('a')],i=links.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const next=i+(e.key==='ArrowDown'?1:-1);if(next<0)$('#query').focus();else links[Math.min(next,links.length-1)]?.focus()}};
+const legacySlug=new URLSearchParams(location.search).get('slug');
+if(legacySlug)location.replace('/cook?slug='+encodeURIComponent(legacySlug));
+else fetch('/api/index').then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.error||'Servizio non disponibile.');return data}).then(data=>{recipes=data.recipes.map(r=>({...r,key:normal(r.title)}));try{$('#query').value=sessionStorage.getItem('cucina-query')||''}catch(error){}render();$('#query').focus()}).catch(error=>$('#count').textContent=error.message);
+</script>
+</html>

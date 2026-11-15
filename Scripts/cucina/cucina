@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Search recipes, preview them, and choose where to cook."""
+from pathlib import Path
+from urllib.parse import urlencode
+import argparse
+import json
+import os
+import re
+import textwrap
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import unicodedata
+import urllib.request
+import webbrowser
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+CONFIG = Path(os.getenv('XDG_CONFIG_HOME', str(Path.home()/'.config')))/'cucina/config.json'
+DATA = Path(os.getenv('XDG_DATA_HOME', str(Path.home()/'.local/share')))/'cucina'
+
+
+def settings():
+    try:
+        config = json.loads(CONFIG.read_text())
+    except (OSError,ValueError):
+        config = {}
+    config['url'] = os.getenv('CUCINA_URL',config.get('url','http://127.0.0.1:8082')).rstrip('/')
+    return config
+
+
+def api(path, payload=None):
+    req = urllib.request.Request(settings()['url']+path, data=json.dumps(payload).encode() if payload is not None else None, headers={'Content-Type':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        try:
+            message=json.load(error).get('error',str(error))
+        except ValueError:
+            message=str(error)
+        raise RuntimeError(message) from error
+    except OSError as error:
+        raise RuntimeError('cucina non raggiungibile: '+settings()['url']) from error
+
+
+def picker(query=''):
+    if not shutil.which('fzf'):
+        raise RuntimeError('Installa fzf per il selettore, oppure usa cucina web.')
+    index=api('/api/index')['recipes']
+    rows=''.join(row['title']+'\t'+row['slug']+'\n' for row in index)
+    colors='border:#80b1d3,label:#8dd3c7,prompt:#8dd3c7,pointer:#fb8072,hl:#ffffb3,hl+:#ffffb3'
+    common=['fzf','--layout=reverse','--margin=15%,10%','--border=rounded','--color='+colors,'--no-mouse']
+    while True:
+        result=subprocess.run(common+['--delimiter=\t','--with-nth=1','--nth=1','--border-label= cucina · GialloZafferano ','--prompt=Cerca › ','--header=Scrivi parte del nome · ↑↓ scegli · Invio anteprima · Esc esci\nNomi ricavati dagli indirizzi · '+str(len(index))+' ricette','--print-query','--query='+query],input=rows,stdout=subprocess.PIPE,text=True)
+        if result.returncode:
+            return
+        query,choice=result.stdout.rstrip('\n').split('\n',1)
+        title,slug=choice.split('\t',1)
+        print('\033[2J\033[H\033[?25l\n\n  Carico l’anteprima…',flush=True)
+        try:
+            recipe=api('/api/recipe?'+urlencode({'slug':slug}))
+        except RuntimeError as error:
+            input(str(error)+'\nInvio torna alla ricerca.');continue
+        def color(hexcode, text, bold=False):
+            red,green,blue=(int(hexcode[i:i+2],16) for i in (1,3,5))
+            return f'\033[{"1;" if bold else ""}38;2;{red};{green};{blue}m{text}\033[0m'
+        preview_columns=min(shutil.get_terminal_size().columns-4,max(46,int(shutil.get_terminal_size().columns*.4)))
+        preview_margin=max(0,(shutil.get_terminal_size().columns-preview_columns)//2)
+        def field(label, value, shade):
+            gap=' '*max(2,preview_columns-8-len(label)-len(value))
+            return color('#80b1d3',label)+gap+color(shade,value)
+        header=[color('#8dd3c7','\n'.join(textwrap.wrap(recipe['name'],width=max(20,preview_columns-8))),True),'']
+        header += [field('Dosi',recipe['servings'] or 'non indicate','#fdb462')]
+        header += [field(label,value,'#bebada') for label,value in recipe['times']]
+        header += [field('Difficoltà',recipe['difficulty'] or 'non indicata','#b3de69')]
+        header += [field(recipe['calorie_basis'],recipe['calories'] or 'non indicate','#ffffb3')]
+        if recipe['remarks']:
+            header += ['',color('#d9d9d9','\n'.join(textwrap.wrap(recipe['remarks'],width=max(20,preview_columns-8))))]
+        if recipe.get('cached'):
+            header += [color('#fb8072','Copia salvata: fonte non raggiungibile.')]
+        header += ['',color('#80b1d3','Ingredienti',True),'']
+        ingredients=[]
+        for name,amount in recipe['ingredients']:
+            match=re.fullmatch(r'(\d[\d,./]*)(?:\s*(.*))?',amount)
+            number,unit=(match[1],match[2] or '') if match else ('',amount)
+            ingredients.append((name,number,unit))
+        number_width=max([3]+[len(number) for _,number,_ in ingredients])
+        unit_width=max([1]+[len(unit) for _,_,unit in ingredients])
+        available=max(20,preview_columns-8)
+        name_width=max(12,available-number_width-unit_width-3)
+        for name,number,unit in ingredients:
+            lines=textwrap.wrap(name,width=name_width) or ['']
+            header += [f'{lines[0]:<{name_width}}  '+color('#fdb462',f'{number:>{number_width}}')+' '+color('#fdb462',f'{unit:<{unit_width}}')]
+            header += lines[1:]
+        # Enter executes an action inside fzf; only Esc returns to the results.
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix='cucina-') as temporary:
+            preview=Path(temporary)/'preview.txt'
+            preview.write_text('\n'.join(header))
+            env=dict(os.environ,CUCINA_PREVIEW=str(preview),CUCINA_PYTHON=sys.executable,CUCINA_COMMAND=str(HERE/'cucina'),CUCINA_SLUG=slug)
+            subprocess.run(common+[f'--margin=15%,{preview_margin}','--ansi','--disabled','--border-label= cucina · anteprima ','--prompt=','--info=hidden','--header=↑↓ scegli · Invio esegui · Esc torna\nShift-↑↓ scorri gli ingredienti\n','--preview=cat "$CUCINA_PREVIEW"','--preview-window=up:75%:wrap','--bind=shift-up:preview-up,shift-down:preview-down','--bind=enter:transform-header("$CUCINA_PYTHON" "$CUCINA_COMMAND" _action {})'],input='Mostra qui\nInvia al tablet\n',stdout=subprocess.DEVNULL,text=True,env=env)
+
+
+
+def up():
+    DATA.mkdir(parents=True,exist_ok=True)
+    config=settings()
+    local='http://127.0.0.1:'+str(config.get('port',8082))
+    try:
+        with urllib.request.urlopen(local+'/api/status',timeout=2):
+            print('cucina è già attiva.');return
+    except OSError:
+        pass
+    with (DATA/'server.log').open('a') as log:
+        process=subprocess.Popen([sys.executable,str(HERE/'cucina'),'serve'],stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True)
+    (DATA/'server.pid').write_text(str(process.pid))
+    print('cucina avviata · pid '+str(process.pid))
+
+
+def down():
+    # The responding process supplies its own PID, avoiding a stale PID file.
+    config=settings()
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:'+str(config.get('port',8082))+'/api/status',timeout=2) as response:
+            status=json.load(response)
+        os.kill(status['pid'],signal.SIGTERM)
+    except OSError:
+        print('cucina è già ferma.');return
+    print('cucina fermata.')
+
+
+HELP = {
+    'search': ('[parole…]', 'Cerca i titoli con corrispondenza fuzzy; senza parole apre tutto l’indice.'),
+    'web': ('', 'Apri il sito: cerca e leggi la ricetta su questo dispositivo.'),
+    'tablet': ('', 'Apri /screen: riceve le ricette inviate dal terminale.'),
+    'status': ('', 'Mostra se il server configurato risponde e quante ricette contiene.'),
+    'refresh': ('', 'Aggiorna subito l’indice sul server configurato.'),
+    'serve': ('', 'Esegui il server in primo piano su questa macchina; Ctrl-C lo ferma.'),
+    'up': ('', 'Avvia il server in background su questa macchina.'),
+    'down': ('', 'Ferma il server su questa macchina.'),
+    'restart': ('', 'Riavvia il server su questa macchina dopo modifiche Python.'),
+    'help': ('[comando]', 'Questa guida, oppure i dettagli di un comando. Anche -h e --help.'),
+}
+
+
+def usage(topic=''):
+    colored=sys.stdout.isatty() and 'NO_COLOR' not in os.environ
+    def c(text, code):
+        return f'\033[{code}m{text}\033[0m' if colored else text
+    print('\n'+c('cucina', '1;38;2;141;211;199')+' · cerca una ricetta e scegli dove cucinare')
+    print('Server configurato: '+settings()['url'])
+    if topic:
+        if topic not in HELP:
+            raise ValueError('Comando sconosciuto: '+topic+'. Usa cucina --help.')
+        args,description=HELP[topic]
+        command='' if topic=='search' else topic+' '
+        print('\n  '+c('cucina '+command+args, '1;38;2;128;177;211'))
+        print('  '+description+'\n')
+        if topic in ('serve','up','down','restart'):
+            print('Esegui questo comando sulla macchina che ospita il servizio.')
+            print('La URL del client non cambia la macchina su cui viene eseguito.\n')
+        return
+    print('\n'+c('Uso', '1'))
+    print('  cucina [parole…]     oppure     cucina <comando>')
+    print('\n'+c('Da qualsiasi dispositivo', '1'))
+    for name in ('search','web','tablet','status','refresh','help'):
+        args,description=HELP[name]
+        label='[parole…]' if name=='search' else name+(' '+args if args else '')
+        print('  '+c(f'{label:<17}', '38;2;128;177;211')+description)
+    print('\n'+c('Sulla macchina che ospita il servizio', '1'))
+    for name in ('serve','up','down','restart'):
+        print('  '+c(f'{name:<17}', '38;2;128;177;211')+HELP[name][1])
+    print('\n'+c('Nel terminale', '1'))
+    print('  Scrivi per filtrare · ↑↓ scegli · Invio apre l’anteprima · Esc torna/esce.')
+    print('  Mostra qui apre il browser; Invia al tablet aggiorna la sua pagina /screen.')
+    print('  Entrambe le azioni lasciano aperta l’anteprima. Shift-↑↓ scorre gli ingredienti.')
+    print('\n'+c('Esempi', '1'))
+    print('  cucina palline coco     cerca anche parole interne al titolo')
+    print('  cucina web              cerca direttamente dal telefono o tablet')
+    print('  cucina tablet           lascia questa pagina aperta sul tablet')
+    print('\n'+c('File e aggiornamenti', '1'))
+    print('  Config: ~/.config/cucina/config.json · CUCINA_URL sovrascrive la URL del client.')
+    print('  Cache: ~/.cache/cucina/ · Note e log: ~/.local/share/cucina/.')
+    print('  HTML: ricarica la pagina. Python: cucina restart sulla macchina server.\n')
+
+
+def main():
+    parser=argparse.ArgumentParser(description='cucina · cerca una ricetta e scegli dove cucinare',add_help=False)
+    parser.add_argument('-h','--help',action='store_true')
+    parser.add_argument('command',nargs='?',default='',help='web, tablet, serve, up, down, restart, status, refresh, oppure parole da cercare')
+    parser.add_argument('words',nargs='*')
+    args=parser.parse_args()
+    command=args.command
+    if args.help or command=='help':
+        topic=(args.words[0] if args.words else '') if command=='help' else command
+        usage(topic)
+        return
+    if command=='_action':
+        action=' '.join(args.words)
+        slug=os.environ['CUCINA_SLUG']
+        try:
+            if action=='Mostra qui':
+                opened=webbrowser.open(settings()['url']+'/cook?'+urlencode({'slug':slug}))
+                message='Ricetta aperta qui.' if opened else 'Impossibile aprire il browser.'
+            elif action=='Invia al tablet':
+                state=api('/api/screen',{'slug':slug})
+                message='Ricetta inviata al tablet.' if state['tablet_online'] else 'Ricetta pronta: apri Tablet.'
+            else:
+                message='Scegli un’azione.'
+        except (RuntimeError,OSError) as error:
+            message=str(error)
+        print('↑↓ scegli · Invio esegui · Esc torna\nShift-↑↓ scorri gli ingredienti\n'+message)
+    elif command=='serve':
+        import server
+        config=settings()
+        server.serve(config.get('host','127.0.0.1'),int(config.get('port',8082)))
+    elif command=='up':up()
+    elif command=='down':down()
+    elif command=='restart':down();time.sleep(.3);up()
+    elif command=='status':
+        status=api('/api/status');print(f"cucina · {status['recipes']} ricette · {settings()['url']}")
+    elif command in ('web','tablet'):
+        webbrowser.open(settings()['url']+('/screen' if command=='tablet' else '/'))
+    elif command=='refresh':
+        result=api('/api/index',{})
+        print(str(result['recipes'])+' ricette aggiornate.')
+    else:
+        picker(' '.join([command]+args.words).strip())
+
+
+if __name__=='__main__':
+    try:
+        main()
+    except (RuntimeError,OSError,ValueError) as error:
+        sys.exit(str(error))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if sys.stdout.isatty():print('\033[?25h',end='',flush=True)

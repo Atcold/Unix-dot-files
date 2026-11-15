@@ -34,3 +34,7 @@ By day the files open in Skim, which reloads itself on every rebuild. After suns
 ## `radio/`
 
 The terminal radio player and the always-on streaming service share this folder. `radio` plays locally; `radio status`, `watch`, and `deploy` manage the server. See [radio/README.md](radio/README.md).
+
+## `cucina/`
+
+`cucina` searches recipe titles and previews ingredients and preparation details. ‘Mostra qui’ opens cooking cards on this device; ‘Invia al tablet’ selects them on the listening tablet. The browser interface and terminal picker use the same service. See [cucina/README.md](cucina/README.md).

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="it"><meta charset="utf-8"><meta name="color-scheme" content="only light"><meta name="viewport" content="width=device-width, initial-scale=1"><title>cucina · ricetta</title>
+<style>:root{color-scheme:only light}
+  /* One card per screen, in big type, to read from across the counter: the
+     ingredients, then a step each. E-ink: black on white, nothing moves. */
+  html, body { margin: 0; background: #fff; color: #000; }
+  body { font: 26px/1.45 Georgia, serif; }
+  .card { display: none; padding: 1em 1.1em 2.5em; }
+  .card.current { display: block; }
+  h1 { font-size: 1.5em; line-height: 1.2; margin: 0 0 .4em; }
+  h2 { font: bold .8em sans-serif; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .7em; }
+  .meta { font-size: .8em; margin: 0 0 1em; }
+  .facts { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: .2em 1em; font-size: .8em; margin: 0 0 1em; }
+  .facts dt, .facts dd { margin: 0; color: #000; }
+  .facts dd { text-align: right; font-variant-numeric: tabular-nums; }
+  .intro.with-photo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2em; align-items: start; }
+  .card img.finished { width: 100%; max-height: 15em; object-fit: contain; margin: 0; }
+  .intro { margin-bottom: .8em; }
+  @media(max-width:480px) { .intro.with-photo { grid-template-columns: 1fr; } .intro.with-photo .details { order: 2; } .card img.finished { max-height: 10em; order: 1; } }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: .35em 0; border-bottom: 1px solid #000; vertical-align: top; }
+  td.amount { text-align: right; white-space: nowrap; padding-left: 1em; }
+  select { font: bold 1em sans-serif; margin-left: .6em; padding: .1em .3em; border: 2px solid #000;
+           border-radius: 0; background: #fff; color: #000; }
+  h2.notes { margin-top: 1.4em; }
+  #notes { list-style: none; padding: 0; margin: 0; font-size: .8em; }
+  #notes li { padding: .2em 0; }
+  #note input { box-sizing: border-box; width: 100%; margin-top: .4em; padding: .4em; font: .8em sans-serif;
+                border: 2px solid #000; border-radius: 0; background: #fff; color: #000; }
+  .source { font: 14px monospace; opacity: 1; margin-top: 1.5em; }
+  /* The schema: read left to right; a cell spanning rows joins those ingredients. */
+  .schema table { font-size: .75em; line-height: 1.25; }
+  .schema td { border: 1.5px solid #000; padding: .35em .4em; vertical-align: middle; }
+  .schema .amount { font-weight: bold; white-space: nowrap; }
+  ol.steps { margin: 0; padding-left: 1.4em; }
+  ol.steps li { margin: 0 0 .6em; }
+  .card img { display: block; width: 100%; height: auto; margin: 0 0 .8em; }
+  /* GZ's photo marks: which photo of the strip above, counting from the left. */
+  .ref { display: inline-block; min-width: 1.3em; font: bold .6em/1.6 sans-serif; text-align: center;
+         border: 1px solid #000; border-radius: 3px; vertical-align: .25em; }
+  /* Replaced as a fresh element on each change: the tablet does not repaint edited text. */
+  #status { position: fixed; right: .4em; bottom: .3em; font: 12px monospace; opacity: 1; }
+td.amount,td.unit{color:#000;opacity:1}input::placeholder{color:#000;opacity:1}</style><style>#loading{padding:1em}button{font:inherit;border:1px solid #000;background:#fff;color:#000;padding:5px 14px}.nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;background:#fff;border-top:1px solid #000;padding:8px 16px;font:14px system-ui}.card{padding-bottom:4em}.source a{color:#000}td.amount{text-align:right;width:1%;padding-left:1em;padding-right:0;font-variant-numeric:tabular-nums}td.unit{text-align:left;width:1%;white-space:nowrap;padding-left:.5em}.ref{font-family:system-ui}
+.recipe-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px;font:16px system-ui}
+.recipe-links a{display:inline-block;padding:9px 16px;border:1px solid #000;color:#000;background:#fff;text-decoration:none}
+.nav{border-top:0;padding:4px 12px;background:#fff;justify-content:center}
+.nav #status{position:static;font:12px monospace;opacity:1}
+</style>
+<div id="loading">Carico la ricetta…</div><main id="cards"></main>
+<nav class="nav"><span id="status"></span></nav>
+<script>
+var slug=new URLSearchParams(location.search).get('slug'),cards=[],current=0;
+function esc(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function say(text){var fresh=document.createElement('span');fresh.id='status';fresh.textContent=text;document.getElementById('status').replaceWith(fresh)}
+function go(n){if(!cards.length)return;n=Math.max(1,Math.min(cards.length,n));if(current)cards[current-1].classList.remove('current');cards[n-1].classList.add('current');current=n;window.scrollTo(0,0);say(n+' / '+cards.length)}
+function imageURL(url){return '/image?url='+encodeURIComponent(url)}
+function amountParts(value){var m=/^(\d[\d,./]*)(?:\s*(.*))?$/.exec(value);return m?[m[1],m[2]||'']:['',value]}
+function scaled(text,f){var m=/^(\d+(?:[.,]\d+)?)(.*)$/.exec(text);if(!m||f===1)return text;var n=parseFloat(m[1].replace(',','.'))*f;n=n>=10?Math.round(n):Math.round(n*10)/10;return String(n).replace('.',',')+m[2]}
+function showNotes(lines){var list=document.getElementById('notes');list.replaceChildren();lines.forEach(function(line){var li=document.createElement('li');li.textContent=line;list.appendChild(li)})}
+fetch('/api/recipe?slug='+encodeURIComponent(slug)).then(function(r){return r.json().then(function(data){if(!r.ok)throw Error(data.error);return data})}).then(function(r){
+ document.title=r.name;
+ var facts=[];
+ if(r.servings)facts.push('<dt>Dosi per</dt><dd><span data-amount="'+esc(r.servings)+'">'+esc(r.servings)+'</span></dd>');
+ r.times.forEach(function(t){facts.push('<dt>'+esc(t[0])+'</dt><dd>'+esc(t[1])+'</dd>')});
+ facts.push('<dt>Difficoltà</dt><dd>'+esc(r.difficulty||'Non indicata')+'</dd>');
+ facts.push('<dt>'+esc(r.calorie_basis||'Calorie')+'</dt><dd>'+esc(r.calories||'Non indicate')+'</dd>');
+ var meta='<dl class="facts">'+facts.join('')+'</dl>';
+ var ingredientTable='<h2>Ingredienti <select id="factor"><option value="0.5">×½</option><option value="1" selected>×1</option><option value="1.5">×1½</option><option value="2">×2</option><option value="3">×3</option><option value="4">×4</option></select></h2><table>'+r.ingredients.map(function(i){var parts=amountParts(i[1]);return '<tr><td>'+esc(i[0])+'</td><td class="amount" data-amount="'+esc(parts[0])+'">'+esc(parts[0])+'</td><td class="unit">'+esc(parts[1])+'</td></tr>'}).join('')+'</table>';
+ var details=meta+(r.remarks?'<p class="meta">'+esc(r.remarks)+'</p>':'')+(r.cached?'<p class="meta">Copia salvata: la fonte non è raggiungibile.</p>':'');
+ var out='<section class="card"><h1>'+esc(r.name)+'</h1><div class="intro'+(r.image?' with-photo':'')+'"><div class="details">'+details+'</div>'+(r.image?'<img class="finished" src="'+esc(imageURL(r.image))+'" alt="'+esc(r.name)+' — piatto finito">':'')+'</div>'+ingredientTable+'<h2 class="notes">Note</h2><ul id="notes"></ul><form id="note"><input name="text" placeholder="una nota, poi invio" autocomplete="off"></form><nav class="recipe-links"><a id="back">Ricette</a><a id="source" target="_blank" rel="noopener">GialloZafferano ↗</a></nav></section>';
+ var short=!r.steps.some(function(s){return s.img})&&r.steps.map(function(s){return s.html}).join('').length<=900;
+ if(short)out+='<section class="card"><h2>Procedimento</h2><ol class="steps">'+r.steps.map(function(s){return '<li>'+s.html+'</li>'}).join('')+'</ol></section>';
+ else r.steps.forEach(function(s,i){out+='<section class="card"><h2>Passo '+(i+1)+' / '+r.steps.length+'</h2>'+(s.img?'<img src="'+esc(imageURL(s.img))+'" alt="Foto del passaggio">':'')+'<p>'+s.html+'</p></section>'});
+ document.getElementById('cards').innerHTML=out;document.getElementById('source').href=r.url;document.getElementById('back').href='/';document.getElementById('loading').remove();cards=document.querySelectorAll('.card');go(parseInt(new URLSearchParams(location.search).get('page'))||1);
+ document.getElementById('factor').onchange=function(e){var f=parseFloat(e.target.value);document.querySelectorAll('[data-amount]').forEach(function(el){var fresh=el.cloneNode(false);fresh.textContent=scaled(el.dataset.amount,f);el.replaceWith(fresh)})};
+ fetch('/api/notes?slug='+encodeURIComponent(slug)).then(function(r){return r.json()}).then(showNotes).catch(function(){say('Note non disponibili')});
+ document.getElementById('note').onsubmit=function(e){e.preventDefault();var input=e.target.elements.text,text=input.value.trim();if(!text)return;fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:slug,text:text})}).then(function(r){if(!r.ok)throw Error();return r.json()}).then(function(lines){showNotes(lines);input.value=''}).catch(function(){say('Nota non salvata')})};
+}).catch(function(error){document.getElementById('loading').textContent=error.message});
+document.addEventListener('keydown',function(e){if(e.target.closest('input,select,button,a'))return;var to={ArrowRight:1,PageDown:1,' ':e.shiftKey?-1:1,ArrowLeft:-1,PageUp:-1}[e.key];if(to){go(current+to);e.preventDefault()}});
+document.addEventListener('click',function(e){if(e.target.closest('a,button,select,form,.nav,.recipe-links'))return;go(current+(e.clientX>window.innerWidth/2?1:-1))});
+window.addEventListener('message',function(e){if(e.origin===location.origin&&e.data&&e.data.page)go(e.data.page)});
+</script></html>
