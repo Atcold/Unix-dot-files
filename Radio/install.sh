@@ -63,6 +63,7 @@ fi
 if [ "$ROLE" = droid ] || [ "$ROLE" = all ]; then
   echo 'Installing the packages the relays need'
   pkg install -y ffmpeg icecast python
+  pip install paho-mqtt   # the server's Rai reader subscribes to Rai's current-song topic
 
   echo 'Installing the radio server'
   BINDIR="${PREFIX:-$HOME/.local}/bin"

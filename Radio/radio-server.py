@@ -44,8 +44,14 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    import paho.mqtt.client as mqtt          # the Rai reader below; install.sh adds it on the droid
+except ImportError:
+    mqtt = None
 
 try:
     import radio_core
@@ -107,6 +113,17 @@ HOMEPAGES = {
     "wqxr": "https://www.wqxr.org/",
     "rai-radio-classica": "https://www.raiplay.it/radio",
 }
+
+# Rai Radio Classica sends no StreamTitle, so its pieces come from the current-song
+# service Rai's own web player uses: a one-hour token from the token service, then a
+# retained MQTT message per piece on the channel's topic. The slug is the m3u name;
+# clientId is Rai's own recipe, a UUIDv5 of the channel page's url.
+RAI_SLUG = "rai-radio-classica"
+RAI_TOKEN = "https://www.raiplaysound.it/atomatic/token-service/api/jwt-ws"
+RAI_PAGE = "https://www.raiplaysound.it/radio3classica"
+RAI_TOPIC = "ws/rai-radio-3-classica"
+RAI_SCHEDULE = "https://www.raiplaysound.it/palinsesto/onAir.json"
+RAI_CHANNEL = "Rai Radio 3 Classica"
 IMG_MAGIC = [b"\x89PNG", b"GIF8", b"\xff\xd8", b"RIFF", b"BM", b"<svg", b"<?xml", b"\x00\x00\x01\x00"]
 
 
@@ -442,7 +459,7 @@ class Radio:
         self.procs = {}          # slug -> ffmpeg Popen
         self.threads = {}        # slug -> relay thread
         self.rings = {}          # slug -> Ring, alive while its relay is
-        self.titles = {}         # slug -> [title, since], from the icy side readers
+        self.titles = {}         # slug -> [title, since, loggable], from the icy readers and Rai
         self.meta = {st["slug"]: {"restarts": 0, "started": 0.0} for st in self.stations}
         self.icecast = None
         self.proxy_listeners = {}    # mount -> listeners on the page's buffered stream
@@ -495,7 +512,8 @@ class Radio:
                 t = threading.Thread(target=self.relay_loop, args=(slug,), daemon=True)
                 self.threads[slug] = t
                 t.start()
-                threading.Thread(target=self.meta_loop, args=(slug,), daemon=True).start()
+                if slug != RAI_SLUG:   # Rai's titles come from rai_loop, not its stream
+                    threading.Thread(target=self.meta_loop, args=(slug,), daemon=True).start()
 
     def power(self, on):
         with self.lock:
@@ -651,11 +669,92 @@ class Radio:
             except Exception:
                 time.sleep(5)
 
-    def note_title(self, slug, title):
+    def rai_loop(self):
+        """Keep Rai's piece captions current, in the one thread that talks to Rai.
+        The caption arrives over Rai's own current-song channel, exactly as its web
+        player reads it: a short-lived token opens an MQTT subscription whose
+        retained message names the piece, then one message per change. The token
+        lives about an hour, so this loop renews it before its expiry and
+        reconnects, backing off when anything fails. While no caption is current,
+        before the first message or after an expiry, the running programme from
+        Rai's schedule json stands in, shown to the page but never logged, since a
+        programme is not something I listened to."""
+        st = next((s for s in self.stations if s["slug"] == RAI_SLUG), None)
+        if st is None:
+            return
+        client_id = str(uuid.uuid5(uuid.NAMESPACE_URL, RAI_PAGE))
+        seen = [0.0]  # wall-clock seconds until which the last caption still holds
+
+        def programme():
+            try:
+                feed = json.loads(radio_core._open(RAI_SCHEDULE).read().decode("utf-8", "replace"))
+                item = next((o["currentItem"] for o in feed.get("on_air", [])
+                             if o.get("channel") == RAI_CHANNEL), None)
+                name = (item or {}).get("name") or ""
+                if name:
+                    self.note_title(RAI_SLUG, name, loggable=False)
+            except Exception:
+                pass
+
+        fails = 0
+        while True:
+            if mqtt is None:   # paho-mqtt missing: the programme is all this box can show
+                programme()
+                time.sleep(60)
+                continue
+            client = None
+            try:
+                tok = json.loads(radio_core._open(
+                    f"{RAI_TOKEN}?clientId={client_id}&namespace=sound",
+                    headers={"X-Caller-Version": "1.0"}).read().decode("utf-8", "replace"))
+                client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=tok["clientId"],
+                                     transport="websockets", protocol=mqtt.MQTTv311)
+                client.username_pw_set(tok["clientId"])
+                client.ws_set_options(path=f"/mqtt?jwt={tok['token']}&client-id={tok['clientId']}")
+                client.tls_set()
+                client.on_connect = lambda c, u, f, rc, p=None: c.subscribe(RAI_TOPIC, qos=1)
+
+                def on_message(c, u, m):
+                    try:
+                        now = json.loads(m.payload.decode("utf-8", "replace")).get("now") or {}
+                    except ValueError:
+                        return
+                    title, banner = radio_core.clean_title(st["name"], now.get("caption") or "")
+                    if title and not banner:
+                        self.note_title(RAI_SLUG, title)
+                        seen[0] = max((now.get("expireAt") or 0) / 1000, time.time() + 90)
+
+                client.on_message = on_message
+                client.connect(tok["basePath"], 443, keepalive=30)
+                client.loop_start()
+                while True:  # hold the subscription until the token nears its hour
+                    time.sleep(10)
+                    if time.time() * 1000 > tok["exp"] - 300:
+                        break
+                    if not client.is_connected():
+                        raise ConnectionError("the current-song subscription dropped")
+                    if time.time() > seen[0]:
+                        programme()
+                fails = 0      # a token's hour passed cleanly: reset the backoff
+            except Exception:
+                time.sleep(min(60, 2 ** min(fails, 6)))
+                fails += 1
+            finally:
+                try:
+                    if client:
+                        client.loop_stop()
+                        client.disconnect()
+                except Exception:
+                    pass
+
+    def note_title(self, slug, title, loggable=True):
+        """Keep a station's current title. loggable False shows the title on the page
+        and status without ever logging it: Rai's programme name stands in while no
+        piece caption is current, and a programme is not something I listened to."""
         with self.lock:
             cur = self.titles.get(slug)
             if not cur or cur[0] != title:
-                self.titles[slug] = [title, time.time()]
+                self.titles[slug] = [title, time.time(), loggable]
 
     def log_line(self, station, title):
         """Append one row, same columns as radio.lua: date, time, station, piece.
@@ -683,11 +782,13 @@ class Radio:
             for st in self.stations:
                 slug = st["slug"]
                 try:
-                    title = self.titles.get(slug, ["", 0])[0]
+                    entry = self.titles.get(slug, ["", 0, True])
+                    title, loggable = entry[0], entry[2]
                     listening = stats.get(self.mount(st), {}).get("listeners", 0) > 0
                     cur = watching.get(slug)
-                    if not title or not listening or not cur or cur[0] != title:
-                        watching[slug] = [title, time.time(), False] if title and listening else None
+                    if not title or not loggable or not listening or not cur or cur[0] != title:
+                        watching[slug] = ([title, time.time(), False]
+                                          if title and loggable and listening else None)
                         continue
                     if not cur[2] and time.time() - cur[1] >= 30:
                         cur[2] = True
@@ -1143,6 +1244,7 @@ def serve():
     threading.Thread(target=radio.supervisor, daemon=True).start()
     threading.Thread(target=radio.log_loop, daemon=True).start()
     threading.Thread(target=radio.auto_off, daemon=True).start()
+    threading.Thread(target=radio.rai_loop, daemon=True).start()
     threading.Thread(target=fetch_logos, daemon=True).start()
     Handler.radio = radio
     http.server.ThreadingHTTPServer(("0.0.0.0", WEB_PORT), Handler).serve_forever()
