@@ -2,10 +2,19 @@
 """Serve my radio stations as icecast mounts, with a web page to switch them on and off.
 
 Stations come from radio.m3u in this folder, the file the `radio` alias plays on the Macs;
-$RADIO_M3U names another. Each station that is on runs one ffmpeg that decodes the upstream
-and republishes it as a uniform 128k MP3 mount at http://<host>:8001/<slug>.mp3, so a
-listener's player only ever sees plain MP3 at one bitrate whatever the station sends. A
-supervisor restarts ffmpeg when a station's stream drops.
+$RADIO_M3U names another. Each station that is recording runs one ffmpeg that decodes the
+upstream and republishes it as a uniform 128k MP3 mount at http://<host>:8001/<slug>.mp3,
+so a listener's player only ever sees plain MP3 at one bitrate whatever the station sends.
+The same ffmpeg copies its encoded bytes into a Ring: a few minutes of recent audio in the
+server's RAM, nothing on disk. The page's player listens out of a Ring, deliberately a set
+number of seconds behind live, and when the phone's network drops the droid replays the
+missed bytes from the Ring at line speed, so the buffer refills and the piece plays on
+without a gap. Plain URL requests (Evermusic, copied mount links) still stream live
+through icecast exactly as they always did.
+
+Recording is by default off, so the droid does nothing when nobody listens: the page has a
+recording switch, tapping a station also switches it on, and relays sleep themselves fifteen
+minutes after the last listener. A supervisor restarts ffmpeg when a station's stream drops.
 
 radio_core.py in this folder holds the rules both players share. It reads the icy
 StreamTitle chunks, undoes the encoding the stations get wrong, and tells a station's own
@@ -23,6 +32,7 @@ once a piece has played 30 s with a listener connected.
 """
 
 import base64
+import collections
 import http.server
 import json
 import os
@@ -60,17 +70,24 @@ LOGDIR = STATE / "logs"
 LOGOS = STATE / "logos"
 PIDFILE = STATE / "radio.pid"
 CONFIG = STATE / "icecast.xml"
-ENABLED = STATE / "enabled.json"
+MUTED = STATE / "muted.json"
 LOGTSV = STATE / "log.tsv"
+PAGE = Path(__file__).with_name("radio-page.html")
 
 ICECAST_PORT = 8001
 WEB_PORT = 8080
 UA = radio_core.UA
 
+AUDIO_BPS = 16000   # bytes per second of a 128 kbit/s MP3 (128000 / 8): how far a lag reaches into a Ring
+RING_MAX = AUDIO_BPS * 300   # five minutes of tape beyond the page's 180 s buffer: a
+                             # dropout up to eight minutes costs silence, not music
+IDLE_OFF = int(os.getenv("RADIO_IDLE_OFF", "900"))   # a recording with no listener for this
+                             # many seconds sleeps itself; 0 (or negative) keeps it awake
+
 # ColorBrewer Set3 in the order radio.lua uses, without the yellow and the grey.
 COLOURS = ["8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5"]
 WHITE_LOGOS = {"venice-classic-radio"}   # white-on-transparent art, sits on the dark default
-DARK_INK_LOGOS = {"rai-radio-classica", "wqxr"}   # black/olive ink needs the light tile
+DARK_INK_LOGOS = {"rai-radio-classica", "wqxr", "classic-fm"}   # dark ink: the page inverts it for the dark tile
 
 # Where to fetch each station's logo from, tried in order: an official brand image
 # (preferably SVG), then the station homepage's og:image, then DuckDuckGo's icon for
@@ -186,8 +203,229 @@ def fetch_logos(force=False):
                 break
 
 
+HLS_SEG = 6.0   # seconds per HLS segment: Safari's player fetches the tape in these pieces
+
+# MPEG audio frame headers, enough to cut the tape on frame boundaries: bitrates in
+# kbit/s by version (MPEG-1, else MPEG-2/2.5) for Layer III, and sample rates.
+_BR = {1: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+       2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]}
+_SR = {3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000]}
+
+
+def mp3_frame(b, i):
+    """Length and sample count of the Layer III frame starting at b[i], or None."""
+    if i + 4 > len(b) or b[i] != 0xFF or b[i + 1] & 0xE0 != 0xE0:
+        return None
+    ver, layer = (b[i + 1] >> 3) & 3, (b[i + 1] >> 1) & 3
+    bri, sri, pad = b[i + 2] >> 4, (b[i + 2] >> 2) & 3, (b[i + 2] >> 1) & 1
+    if ver == 1 or layer != 1 or bri in (0, 15) or sri == 3:
+        return None
+    sr = _SR[ver][sri]
+    br = _BR[1 if ver == 3 else 2][bri] * 1000
+    if ver == 3:
+        return 144 * br // sr + pad, 1152, sr
+    return 72 * br // sr + pad, 576, sr
+
+
+def id3_timestamp(pts):
+    """The ID3 PRIV tag HLS requires at the head of a packed-audio segment: Apple's
+    transport-stream timestamp, a 33-bit count of 90 kHz ticks."""
+    def safe(n):
+        return bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127])
+    body = b"com.apple.streaming.transportStreamTimestamp\x00" + (pts & 0x1FFFFFFFF).to_bytes(8, "big")
+    frame = b"PRIV" + safe(len(body)) + b"\x00\x00" + body
+    return b"ID3\x04\x00\x00" + safe(len(frame)) + frame
+
+
+class Ring:
+    """The last minutes of one relay's encoded audio, kept in RAM: a run of byte
+    positions [start, end) behind a deque of blocks. A listener starts at lag seconds
+    behind the end, so the phone hears a recording that is already a minute old while
+    the relay keeps writing; when its network drops, it comes back asking for the byte
+    it stopped at, and the Ring replays what arrived in the meantime at line speed.
+    Pruning keeps RING_MAX bytes, so a listener whose connection died longer ago
+    resumes from the oldest byte still held and skips the gap."""
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.blocks = collections.deque()   # (pos, bytes), oldest first
+        self.size = 0
+        self.start = 0
+        self.end = 0
+        self.clients = {}        # page client id -> {"anchor", "upto", "conns", "t"}
+        self.segs = collections.deque()  # HLS segments: {"seq", "start", "end", "dur", "pts", "wall"}
+        self.seq = 0
+        self.hls = {}            # page client id -> {"bytes", "seq", "t"}: segments served
+        self.cut = 0             # where the frame scanner stands, a Ring position
+        self.seg_start = None    # the open segment: first byte, sample count, rate, wall time
+        self.seg_samples = 0
+        self.samples = 0         # samples cut so far, the segments' timestamp clock
+        self.tail = b""          # bytes past self.cut not yet scanned
+
+    def append(self, data):
+        with self.cond:
+            self.blocks.append((self.end, data))
+            self.size += len(data)
+            self.end += len(data)
+            while self.size > RING_MAX and len(self.blocks) > 1:
+                _, old = self.blocks.popleft()
+                self.size -= len(old)
+                self.start += len(old)
+            self.segment(data)
+            while self.segs and self.segs[0]["start"] < self.start:
+                self.segs.popleft()          # its head has been pruned from the tape
+            self.cond.notify_all()
+
+    def segment(self, data):
+        """Walk the new bytes frame by frame and close an HLS segment every HLS_SEG
+        seconds of audio. A relay restart starts a fresh MP3 stream mid-tape, so
+        anything that is not a frame (an ID3 tag, a torn frame) is skipped over."""
+        b = self.tail + data
+        i = 0
+        while True:
+            f = mp3_frame(b, i)
+            if f is None:
+                if i + 4 > len(b):
+                    break
+                if b[i:i + 3] == b"ID3" and i + 10 <= len(b):
+                    z = i + 10 + ((b[i + 6] << 21) | (b[i + 7] << 14) | (b[i + 8] << 7) | b[i + 9])
+                    if z > len(b):
+                        break                # wait for the whole tag
+                    i = z
+                    self.seg_start = None    # a new stream: never splice across it
+                    self.seg_samples = 0
+                    continue
+                i += 1
+                continue
+            n, spf, sr = f
+            if i + n > len(b):
+                break
+            pos = self.cut + i
+            if self.seg_start is None:
+                self.seg_start, self.seg_sr, self.seg_wall = pos, sr, time.time()
+                self.seg_pts = self.samples * 90000 // sr
+            self.seg_samples += spf
+            self.samples += spf
+            i += n
+            if self.seg_samples / self.seg_sr >= HLS_SEG - 0.013:
+                self.segs.append({"seq": self.seq, "start": self.seg_start, "end": self.cut + i,
+                                  "dur": self.seg_samples / self.seg_sr, "pts": self.seg_pts,
+                                  "wall": self.seg_wall})
+                self.seq += 1
+                self.seg_start, self.seg_samples = None, 0
+        self.tail = b[i:]
+        self.cut += i
+
+    def slice(self, a, z):
+        """The bytes [a, z) while the tape still holds them, else None."""
+        with self.cond:
+            if a < self.start or z > self.end:
+                return None
+            out = bytearray()
+            for bpos, blk in self.blocks:
+                if bpos + len(blk) <= a or bpos >= z:
+                    continue
+                out += blk[max(0, a - bpos):z - bpos]
+            return bytes(out)
+
+    def playlist(self, base, behind, query):
+        """A live HLS playlist over the whole tape that tells the player to start
+        behind seconds from the live edge, so it can buffer forward up to live."""
+        with self.cond:
+            segs = list(self.segs)
+        if not segs:
+            return None
+        target = max(round(x["dur"]) for x in segs)
+        behind = min(behind, sum(x["dur"] for x in segs) - 8)   # beyond the playlist Safari starts at live
+        lines = ["#EXTM3U", "#EXT-X-VERSION:6", f"#EXT-X-TARGETDURATION:{target}",
+                 f"#EXT-X-MEDIA-SEQUENCE:{segs[0]['seq']}",
+                 f"#EXT-X-START:TIME-OFFSET=-{behind:.1f},PRECISE=YES"]
+        for x in segs:
+            t = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(x["wall"]))
+            lines.append(f"#EXT-X-PROGRAM-DATE-TIME:{t}.{int(x['wall'] % 1 * 1000):03d}Z")
+            lines.append(f"#EXTINF:{x['dur']:.3f},")
+            lines.append(f"{base}/{x['seq']}.mp3{query}")
+        return "\n".join(lines) + "\n"
+
+    def segment_bytes(self, seq):
+        with self.cond:
+            x = next((x for x in self.segs if x["seq"] == seq), None)
+        if x is None:
+            return None
+        body = self.slice(x["start"], x["end"])
+        return None if body is None else id3_timestamp(x["pts"]) + body
+
+    def seconds(self):
+        return (self.end - self.start) / AUDIO_BPS
+
+    def attach(self, client, pos):
+        """Register a connection of one page client and return where it starts. Safari
+        opens two or three connections per play (a document request, a 2-byte Range
+        probe, the real one) and reconnects on its own after a network blink; all of
+        them carry the page's client id, so the first fixes the anchor the page counts
+        its playhead from, the ones in the next few seconds start at that anchor too,
+        and a later one resumes at the furthest byte already delivered."""
+        with self.cond:
+            now = time.time()
+            for k in [k for k, c in self.clients.items() if not c["conns"] and now - c["t"] > 600]:
+                del self.clients[k]
+            c = self.clients.get(client) if client else None
+            if c is None:
+                c = {"anchor": pos, "upto": pos, "conns": 0, "t0": now, "t": now}
+                if client:
+                    self.clients[client] = c
+            elif now - c["t0"] < 5:
+                pos = c["anchor"]
+            else:
+                pos = max(self.start, min(c["upto"], self.end))
+            c["conns"] += 1
+            c["t"] = now
+            return c, pos
+
+    def client_view(self, client):
+        """What the page needs to draw its buffer: the byte its playhead counts from,
+        the furthest byte delivered to it, and the live edge, all in Ring positions."""
+        with self.cond:
+            c, h = self.clients.get(client), self.hls.get(client)
+            if c is None and h is None:
+                return None
+            out = {"end": self.end, "start": self.start}
+            if c:
+                out.update(anchor=c["anchor"], upto=c["upto"], conns=c["conns"])
+            if h:
+                out.update(hls=h["bytes"], seg=h["seq"])
+            return out
+
+    def read_from(self, pos, stop, idle_max=45):
+        """Yield chunks from byte position pos onward, waiting on the relay as it
+        writes and giving up when stop() turns true or nothing has arrived for
+        idle_max seconds; a stopped relay then releases the connection and the page
+        retries on its own. pos itself moves with the yield."""
+        last = time.time()
+        while not stop():
+            with self.cond:
+                if pos < self.start:
+                    pos = self.start          # what we wanted got pruned: skip the gap
+                chunk = b""
+                if self.end > pos:
+                    out = bytearray()
+                    for bpos, b in self.blocks:
+                        if bpos + len(b) <= pos:
+                            continue
+                        out += b[max(0, pos - bpos):]
+                    pos += len(out)
+                    chunk = bytes(out)
+                if not chunk:
+                    if time.time() - last > idle_max:
+                        return                # the relay has been silent: hang up
+                    self.cond.wait(1.0)
+                    continue
+            last = time.time()
+            yield chunk
+
+
 class Radio:
-    """The daemon's state: icecast, one wanted-flag and one relay thread per station."""
+    """The daemon's state: icecast, the recording switch, one relay thread per station."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -198,12 +436,18 @@ class Radio:
             self.enc, self.fmt, self.ext = encoder()
         except Exception:
             self.enc, self.fmt, self.ext = [], "mp3", ".mp3"  # status reports ffmpeg's failure
-        self.wanted = set()
-        self.procs = {}      # slug -> ffmpeg Popen
-        self.threads = {}    # slug -> relay thread
-        self.titles = {}     # slug -> [title, since], from the icy side readers
+        self.powered = False     # the recording switch; relays run only while it is on
+        self.muted = set()       # stations left out of the recording even while powered
+        self.wanted = set()      # slugs that should be recording right now, from the two above
+        self.procs = {}          # slug -> ffmpeg Popen
+        self.threads = {}        # slug -> relay thread
+        self.rings = {}          # slug -> Ring, alive while its relay is
+        self.titles = {}         # slug -> [title, since], from the icy side readers
         self.meta = {st["slug"]: {"restarts": 0, "started": 0.0} for st in self.stations}
         self.icecast = None
+        self.proxy_listeners = {}    # mount -> listeners on the page's buffered stream
+        self.last_listen = time.time()   # last time anyone streamed or switched on, for idle-off;
+                                         # a fresh start counts as one, so the watchdog gives it 15 min
         self.recent = []    # newest first: {time, station, piece}, the page's played list
         try:
             for row in reversed(LOGTSV.read_text().splitlines()[1:]):
@@ -214,52 +458,117 @@ class Radio:
                     break
         except FileNotFoundError:
             pass
-        if ENABLED.exists():
-            for slug in json.loads(ENABLED.read_text()):
-                self.wanted.add(slug)
+        if MUTED.exists():
+            try:
+                data = json.loads(MUTED.read_text())
+                self.muted = set(data["muted"]) if isinstance(data, dict) else set(data)
+                if isinstance(data, dict):
+                    self.powered = bool(data.get("powered"))   # a debug deploy keeps the recording on
+            except Exception:
+                self.muted = set()
+        self.sync()
 
     def mount(self, st):
         return "/" + st["slug"] + self.ext
 
+    def station_by_mount(self, mount):
+        return next((st for st in self.stations if self.mount(st) == mount), None)
+
     def save(self):
-        ENABLED.write_text(json.dumps(sorted(self.wanted)))
+        """The muted set and the recording switch are the persistent wishes, so a
+        restart for a code update resumes exactly what the page had switched on."""
+        MUTED.write_text(json.dumps({"muted": sorted(self.muted), "powered": self.powered}))
 
-    def respawn(self):
-        """Relaunch relay and meta threads for stations enabled in a previous run;
-        set() spawns threads, and the enabled set restored at startup bypasses it."""
-        for slug in list(self.wanted):
-            self.set(slug, True)
-
-    def set(self, slug, on):
-        with self.lock:
-            if slug not in self.meta:
-                return False
-            if on:
-                self.wanted.add(slug)
-            else:
-                self.wanted.discard(slug)
-            self.save()
-            if on and slug not in self.threads:
+    def sync(self):
+        """Make threads and Rings match the switch and the muted set. The caller holds
+        the lock; a dying relay thread notices it is no longer wanted and retires."""
+        self.wanted = set() if not self.powered else \
+            {st["slug"] for st in self.stations} - set(self.muted)
+        for slug in list(self.threads):
+            if slug not in self.wanted:
+                proc = self.procs.pop(slug, None)
+                self.rings.pop(slug, None)
+                if proc and proc.poll() is None:
+                    proc.terminate()
+        for slug in self.wanted:
+            if slug not in self.threads:
                 t = threading.Thread(target=self.relay_loop, args=(slug,), daemon=True)
                 self.threads[slug] = t
                 t.start()
                 threading.Thread(target=self.meta_loop, args=(slug,), daemon=True).start()
-            if not on:
-                proc = self.procs.pop(slug, None)
-                if proc and proc.poll() is None:
-                    proc.terminate()
+
+    def power(self, on):
+        with self.lock:
+            self.powered = bool(on)
+            if on:
+                self.last_listen = time.time()
+            self.save()
+            self.sync()
+        return self.powered
+
+    def set(self, slug, on):
+        """The page's per-station switch: off mutes a station out of the recording,
+        on unmutes it and switches the whole recording on, because asking for a
+        station is asking to listen."""
+        with self.lock:
+            if slug not in self.meta:
+                return False
+            if on:
+                self.powered = True
+                self.muted.discard(slug)
+            else:
+                self.muted.add(slug)
+            self.save()
+            self.sync()
         return True
 
     def set_all(self, on):
-        for st in self.stations:
-            self.set(st["slug"], on)
+        with self.lock:
+            if on:
+                self.muted.clear()
+            self.powered = bool(on)
+            if on:
+                self.last_listen = time.time()
+            self.save()
+            self.sync()
 
     def select(self, slug):
-        """Single-listener mode: exactly this station on air, every other relay off."""
-        for st in self.stations:
-            if st["slug"] != slug:
-                self.set(st["slug"], False)
-        return self.set(slug, True)
+        """Listen to this station: it joins the recording and stays there, and every
+        other station keeps recording too, so the next switch has a buffer ready."""
+        with self.lock:
+            if slug not in self.meta:
+                return False
+            self.powered = True
+            self.muted.discard(slug)
+            self.last_listen = time.time()
+            self.save()
+            self.sync()
+        return True
+
+    def note_listener(self, mount, on):
+        with self.lock:
+            if on:
+                self.last_listen = time.time()
+            n = self.proxy_listeners.get(mount, 0) + (1 if on else -1)
+            if n > 0:
+                self.proxy_listeners[mount] = n
+            else:
+                self.proxy_listeners.pop(mount, None)
+
+    def auto_off(self):
+        """The recording sleeps itself when nobody has listened for a while, so
+        arriving at the office and forgetting the switch costs the droid nothing.
+        $RADIO_IDLE_OFF=0 switches this watchdog off while debugging."""
+        if IDLE_OFF <= 0:
+            return
+        while True:
+            time.sleep(30)
+            with self.lock:
+                idle = self.powered and time.time() - self.last_listen > IDLE_OFF
+                busy = any(self.proxy_listeners.values())
+            if idle and not busy and not any(
+                    v.get("listeners", 0) for v in self.stats().values()):
+                self.power(False)
 
     def relay_loop(self, slug):
         st = next(s for s in self.stations if s["slug"] == slug)
@@ -270,17 +579,26 @@ class Radio:
                 if slug not in self.wanted:
                     self.threads.pop(slug, None)
                     return
+                ring = self.rings.setdefault(slug, Ring())
+                tee = (f"[f={self.fmt}]icecast://source:{self.source_pw}@127.0.0.1:"
+                       f"{ICECAST_PORT}{self.mount(st)}|[f={self.fmt}]pipe:1")
                 cmd = (["ffmpeg", "-hide_banner", "-loglevel", "warning",
                         "-reconnect", "1", "-reconnect_streamed", "1",
                         "-reconnect_delay_max", "10", "-user_agent", UA,
                         "-i", st["url"], "-vn", "-map", "0:a:0", "-ac", "2"]
-                       + self.enc
-                       + ["-f", self.fmt,
-                          f"icecast://source:{self.source_pw}@127.0.0.1:{ICECAST_PORT}{self.mount(st)}"])
+                       + self.enc + ["-f", "tee", tee])
                 self.meta[slug]["started"] = time.time()
-                proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT,
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=log,
                                         stdin=subprocess.DEVNULL)
                 self.procs[slug] = proc
+            while True:                     # stdout carries the relay's own bytes
+                try:                        # a raw read: bytes flow at once, not in 64 kB lots
+                    data = os.read(proc.stdout.fileno(), 65536)
+                except OSError:
+                    break
+                if not data:
+                    break
+                ring.append(data)
             rc = proc.wait()
             with self.lock:
                 self.procs.pop(slug, None)
@@ -355,8 +673,9 @@ class Radio:
     def log_loop(self):
         """Mirror radio.lua's rule: a piece is logged once it held the mount for 30 s
         while a listener was connected, so skipping through stations logs nothing. A
-        station announces the same piece several times, so the last row per station is
-        kept and a piece that comes back is not written twice."""
+        listener counts whether it came through icecast directly or through this page's
+        buffered proxy. A station announces the same piece several times, so the last
+        row per station is kept and a piece that comes back is not written twice."""
         watching = {}  # slug -> [title, since, logged], the piece being watched
         logged = {}    # slug -> the last title written, so one piece is one row
         while True:
@@ -389,30 +708,34 @@ class Radio:
             time.sleep(3)
 
     def stats(self):
-        """Listener counts and bitrates from icecast's /admin/stats legacy report."""
+        """Listener counts and bitrates from icecast's /admin/stats legacy report,
+        with this server's own buffered listeners merged into their mounts."""
         try:
             xml = urllib.request.urlopen(
                 urllib.request.Request(f"http://127.0.0.1:{ICECAST_PORT}/admin/stats",
                                        headers={"Authorization": self.auth}), timeout=2
             ).read().decode("utf-8", "replace")
         except Exception:
-            return {}
-        out = {}
-        for chunk in xml.split("<source ")[1:]:
-            m = re.search(r'mount="([^"]*)"', chunk)
-            if not m:
-                continue
-            def child(tag):
-                mm = re.search(r"<" + tag + r">([^<]*)</" + tag + ">", chunk)
-                return mm.group(1) if mm else ""
-            try:
-                listeners = int(child("listeners") or 0)
-            except ValueError:
-                listeners = 0
-            out[m.group(1)] = {"listeners": listeners, "bitrate": child("bitrate")}
+            out = {}
+        else:
+            out = {}
+            for chunk in xml.split("<source ")[1:]:
+                m = re.search(r'mount="([^"]*)"', chunk)
+                if not m:
+                    continue
+                def child(tag):
+                    mm = re.search(r"<" + tag + r">([^<]*)</" + tag + ">", chunk)
+                    return mm.group(1) if mm else ""
+                try:
+                    listeners = int(child("listeners") or 0)
+                except ValueError:
+                    listeners = 0
+                out[m.group(1)] = {"listeners": listeners, "bitrate": child("bitrate")}
+        for mount, n in list(self.proxy_listeners.items()):
+            out.setdefault(mount, {"listeners": 0, "bitrate": ""})["listeners"] += n
         return out
 
-    def status(self):
+    def status(self, client=None):
         stats = self.stats()
         rows = []
         for st in self.stations:
@@ -420,6 +743,7 @@ class Radio:
             proc = self.procs.get(slug)
             live = proc is not None and proc.poll() is None and time.time() - self.meta[slug]["started"] > 3
             info = stats.get(self.mount(st), {})
+            ring = self.rings.get(slug)
             error = ""
             if slug in self.wanted and not live:
                 try:
@@ -431,8 +755,10 @@ class Radio:
                          "live": live, "restarts": self.meta[slug]["restarts"],
                          "title": self.titles.get(slug, [""])[0],
                          "bitrate": info.get("bitrate", ""), "listeners": info.get("listeners", 0),
+                         "ring": round(ring.seconds()) if ring else 0,
+                         "me": ring.client_view(client) if ring and client else None,
                          "error": error})
-        return {"pid": os.getpid(), "enc": self.ext.lstrip("."),
+        return {"pid": os.getpid(), "enc": self.ext.lstrip("."), "powered": self.powered,
                 "recent": self.recent, "stations": rows}
 
     def shutdown(self):
@@ -453,147 +779,6 @@ stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="tru
 <circle cx="35" cy="31" r="4.5"/><line x1="35" y1="31" x2="37.5" y2="27.5"/>
 <line x1="31" y1="19" x2="41" y2="7"/><path d="M37 12a8 8 0 0 1 3 4"/><path d="M40 8a12 12 0 0 1 4 6"/>
 </svg>"""
-
-
-CSS = """
-body{background:#000;color:#eaeaea;font-family:"Cascadia Code",ui-monospace,Menlo,monospace;
-margin:24px auto;max-width:640px;padding:78px 16px 24px}
-header{display:flex;align-items:center;gap:12px;margin-bottom:4px}
-h1{font-size:20px;font-weight:600;margin:0;flex:1}
-.bar{display:flex;align-items:center;gap:14px;font-size:13px;color:#9a9a9a;margin-bottom:16px;flex-wrap:wrap}
-.mrow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid #1c1c1c}
-.mrow.playing{background:#0d0d0d;border-left:3px solid;padding-left:3px}
-img.logo{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#101010;flex:none;padding:3px;box-sizing:border-box}
-img.raster{background:none;padding:0}
-img.ink{background:#e8e8e8}
-.tile{width:44px;height:44px;border-radius:8px;background:#0d0d0d;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;border:1px solid}
-.text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st{font-size:12px;white-space:nowrap;color:#9a9a9a;overflow:hidden;text-overflow:ellipsis}
-.st.live{color:#b3de69}.st.warn{color:#fdb462}
-button{background:none;border:1px solid #3a3a3a;color:#9a9a9a;border-radius:6px;padding:2px 8px;
-font:inherit;font-size:11px;flex:none}
-footer{margin-top:18px;font-size:11px;color:#6f6f6f;overflow-wrap:anywhere}
-h2.pl{font-size:11px;font-weight:400;color:#6f6f6f;margin:8px 0 6px;letter-spacing:.08em}
-.prow{display:flex;gap:10px;padding:5px 0 6px 4px;align-items:baseline}
-.ptime{flex:none;color:#6f6f6f}
-.pgrp{display:flex;gap:10px;align-items:baseline;margin:10px 0 2px;border-bottom:1px solid #232323;padding-bottom:3px}
-.pgrp-name{font-weight:700}
-.pwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.pc{font-weight:600;color:#eaeaea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pw{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#player{position:fixed;top:0;left:0;right:0;background:#0a0a0a;border-bottom:1px solid #1c1c1c;
-padding:calc(10px + env(safe-area-inset-top)) 10px 10px;display:flex;align-items:center;gap:9px;
-max-width:640px;margin:0 auto;box-sizing:border-box}
-#player button{font-size:17px;padding:6px 10px;border-radius:20px;line-height:0}
-#bar-tgl{border-color:#8dd3c7;color:#8dd3c7}
-#bar-dot{width:12px;height:12px;border-radius:50%;flex:none;background:transparent}
-#bar-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-#bar-name{display:none}
-#bar-piece{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#vol{width:48px;flex:none;accent-color:#8dd3c7}
-#mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:4}
-#menu{position:fixed;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top));width:min(640px,calc(100% - 24px));
-background:#0a0a0a;border:1px solid #2a2a2a;border-radius:14px;padding:6px 10px;display:none;z-index:5;
-max-height:62vh;overflow-y:auto;box-shadow:0 6px 24px rgba(0,0,0,.7)}
-.pdot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid #3a3a3a;background:transparent}
-#pick{border-color:#3a3a3a;font-size:13px;padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:7px;line-height:0}
-#pick-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
-@media(max-width:560px){#bar-text,#bar-dot{display:none}}
-"""
-
-JS = r"""
-var snd=null, now=null, want=false, titles={}, enabled=[], COL={}, lastName=null;
-ST.forEach(function(s){COL[s.name]='#'+s.colour});
-var ICONS={play:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><path d='M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z'/></svg>",
-pause:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><rect x='6' y='4' width='4.5' height='16' rx='1.5'/><rect x='13.5' y='4' width='4.5' height='16' rx='1.5'/></svg>"};
-function rep(id){return document.getElementById(id)}
-function st_of(slug){for(var i=0;i<ST.length;i++)if(ST[i].slug===slug)return ST[i];return{}}
-function short(n){return n.replace(/\bRadio\b\s*/,'').trim()||n}
-function copy(u,b,ev){if(ev)ev.stopPropagation();navigator.clipboard.writeText(u).then(function(){
-  b.textContent='copied';setTimeout(function(){b.textContent='copy playlist link'},1200)})}
-function menu(on){rep('mask').style.display=on?'block':'none';rep('menu').style.display=on?'block':'none'}
-function setBar(){
-  var st=st_of(now);
-  rep('bar-dot').style.background=st.colour?'#'+st.colour:'transparent';
-  rep('bar-name').textContent=st.name||'nothing playing';
-  rep('bar-name').style.color=st.colour?'#'+st.colour:'#9a9a9a';
-  rep('bar-piece').textContent=(now&&titles[now])||'';
-  rep('bar-tgl').innerHTML=want?ICONS.pause:ICONS.play;
-  rep('pick-name').textContent=now?short(st.name):'radio';
-  rep('pick').style.color=now&&st.colour?'#'+st.colour:'';
-  ST.forEach(function(s){var r=rep('row-'+s.slug);
-    if(r){r.classList.toggle('playing',s.slug===now&&want);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
-  if(now&&titles[now]&&navigator.mediaSession)
-    navigator.mediaSession.metadata=new MediaMetadata({title:titles[now],album:st.name,artist:'AlfDROID radio'});
-}
-function mk(){if(!now)return;var st=st_of(now);
-  if(snd){snd.onerror=null;snd.ended=null;snd.pause()}
-  snd=new Audio(st.url);snd.volume=rep('vol').value;
-  snd.onended=snd.onerror=function(){if(want)setTimeout(mk,3000)};
-  snd.play().catch(function(){});}
-function playRow(slug,ev){if(ev)ev.stopPropagation();
-  if(ev&&(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT'))return;
-  menu(0);                     // a row tap only ever turns that station on
-  now=slug;want=true;
-  fetch('/api/select?slug='+slug);setTimeout(refresh,400);
-  mk();setBar();}
-function offAll(){menu(0);     // ■ is the only way to nothing playing
-  want=false;if(snd)snd.pause();
-  fetch('/api/off-all');setTimeout(refresh,400);setBar();}
-function lastSlug(){           // queue head names the station you last had
-  if(lastName)for(var i=0;i<ST.length;i++)if(ST[i].name===lastName)return ST[i].slug;
-  return ST.length?ST[0].slug:null;}
-function tgl(){                // ▶ means: give me sound back
-  if(!want){if(!now)now=lastSlug();
-    if(!now){menu(1);return}
-    want=true;fetch('/api/select?slug='+now);mk();setBar();return}
-  want=false;if(snd)snd.pause();setBar();}
-function refresh(){
-  fetch('/api/status').then(function(r){return r.json()}).then(function(s){
-    enabled=[];
-    s.stations.forEach(function(st){
-      if(st.enabled){enabled.push(st.slug)}
-      if(st.title)titles[st.slug]=st.title;
-      var e=rep('st-'+st.slug);if(!e)return;
-      if(st.enabled&&st.live){e.textContent='live';e.className='st live'}
-      else if(st.enabled){e.textContent='restarting';e.className='st warn'}
-      else{e.textContent='off';e.className='st'}
-    });
-    if(now&&enabled.indexOf(now)<0){want=false;if(snd)snd.pause()}
-    if(!now&&enabled.length)now=enabled[0];
-    lastName=(s.recent&&s.recent.length)?s.recent[0].station:lastName;
-    ST.forEach(function(x){var d=rep('dot-'+x.slug);if(d){
-      var on=enabled.indexOf(x.slug)>=0;
-      d.style.background=on?'#'+x.colour:'transparent';
-      d.style.borderColor=on?'#'+x.colour:'#3a3a3a'}});
-    var el=rep('played');el.innerHTML='';
-    var last=null;
-    (s.recent||[]).forEach(function(r){
-      if(r.station!==last){var h=document.createElement('div');h.className='pgrp';
-        var ht=document.createElement('span');ht.className='ptime';ht.textContent=r.time;
-        var hn=document.createElement('span');hn.className='pgrp-name';hn.textContent=r.station;
-        if(COL[r.station])hn.style.color=COL[r.station];
-        h.appendChild(ht);h.appendChild(hn);el.appendChild(h);last=r.station}
-      var d=document.createElement('div');d.className='prow';
-      var a=document.createElement('span');a.className='ptime';a.textContent=r.time;
-      var wrap=document.createElement('span');wrap.className='pwrap';
-      var p=r.piece,i=p.indexOf(' - ');
-      var c=document.createElement('span');c.className='pc';c.textContent=i<0?p:p.slice(0,i);
-      var w=document.createElement('span');w.className='pw';w.textContent=i<0?'':p.slice(i+3);
-      wrap.appendChild(c);wrap.appendChild(w);
-      d.appendChild(a);d.appendChild(wrap);el.appendChild(d)});
-    var d=new Date(),p=rep('svc');
-    p.textContent='service on · '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
-    setBar();
-  }).catch(function(){var p=rep('svc');if(p)p.textContent='service off'})}
-function watch(){if(now&&want&&snd&&snd.paused)mk()}
-window.addEventListener('pageshow',function(e){if(e.persisted)location.reload()});
-setInterval(refresh,3000);setInterval(watch,8000);refresh();
-if(navigator.mediaSession){
-  navigator.mediaSession.setActionHandler('play',function(){if(!want)tgl()});
-  navigator.mediaSession.setActionHandler('pause',function(){if(want)tgl()});}
-"""
 
 
 def page(radio, host):
@@ -625,31 +810,21 @@ def page(radio, host):
             f'<div class=text><span class=name style="color:#{colour}">{st["name"]}</span>'
             f'<span class=st id=st-{slug}>off</span></div>'
             f'<span class=pdot id=dot-{slug} title="on"></span></div>')
-    return ("<!doctype html><html><head><meta charset=utf-8>"
-            '<meta name=viewport content="width=device-width, initial-scale=1">'
-            "<title>AlfDROID radio</title><style>" + CSS + "</style></head><body>"
-            "<header>" + svg_icon() + "<h1>AlfDROID radio</h1></header>"
-            '<div class=bar><span id=svc></span>'
-            f'<button onclick="copy(\'http://{host}:{WEB_PORT}/radio.m3u\',this,event)">copy playlist link</button></div>'
-            + '<h2 class=pl>queue</h2><div id=played></div>'
-            + '<div id=mask onclick="menu(0)"></div>'
-            + '<div id=menu>' + "".join(menu_rows) + '</div>'
-            + '<div id=player>'
-              '<button id=pick onclick="menu(1)"><svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">'
-              '<rect x="5" y="19" width="38" height="24" rx="3"/><line x1="31" y1="19" x2="41" y2="7"/>'
-              '<circle cx="35" cy="31" r="4.5"/></svg><span id=pick-name>radio</span></button>'
-              '<button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">'
-              '<path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button>'
-              '<button id=bar-off onclick="offAll()" title="stop"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>'
-              '<span id=bar-dot></span>'
-              '<span id=bar-text><span id=bar-name>—</span><span id=bar-piece></span></span>'
-              '<input type=range id=vol min=0 max=1 step=0.05 value=1 oninput="if(snd)snd.volume=this.value">'
-              '</div>'
-            + f'<footer>stations from {M3U} · relays re-encode to {radio.ext.lstrip(".")}, '
-              f"one ffmpeg per station, restarted on drop<br>streams served here on "
-              f"{WEB_PORT} (icecast direct on {ICECAST_PORT}) · reach both over the tailnet</footer>"
-              f'<script>var ST={json.dumps(station_list)};</script>'
-              f'<script>{JS}</script></body></html>')
+    # The client is the template file next to the server, read fresh every request:
+    # edit radio-page.html, scp it, done — no restart, so client tweaks never
+    # disturb the recording or the RAM tapes. Four holes get filled per request.
+    # The controls live in a fixed bar at the bottom of the main page; the station
+    # menu holds nothing but stations. copy link builds its URL in the page itself.
+    menu = "".join(menu_rows)
+    foot = (f"{len(radio.stations)} stations from {M3U.name}, one ffmpeg each, restarted on a drop · "
+            f"{round(RING_MAX / AUDIO_BPS / 60)} min of each kept in RAM, played 3 min behind live · "
+            f"page and streams on :{WEB_PORT}, icecast on :{ICECAST_PORT}, over the tailnet")
+    return (PAGE.read_text()
+            .replace("%%ICON%%", svg_icon())
+            .replace("%%VARS%%", "var ST=" + json.dumps(station_list)
+                     + ",RSEC=" + str(round(RING_MAX / AUDIO_BPS)) + ";")
+            .replace("%%MENU%%", menu)
+            .replace("%%FOOT%%", foot))
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -679,6 +854,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             self.reply(404, "not found", "text/plain")
 
+    def stream_headers(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Accept-Ranges", "none")
+        self.send_header("Cache-Control", "no-cache")
+
     def stream(self, mount):
         # Hold the listener's request while a just-tapped relay comes up (icecast 404s
         # until the source registers), so Safari's gesture-initiated play survives.
@@ -700,15 +881,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if up is None:
             self.reply(504, b"station did not come up\n", "text/plain")
             return
-        self.send_response(200)
-        self.send_header("Content-Type", "audio/mpeg")
-        self.send_header("Accept-Ranges", "none")
-        self.send_header("Cache-Control", "no-cache")
+        self.stream_headers()
         for h in ("icy-name", "icy-br", "icy-genre"):
             v = up.headers.get(h)
             if v:
                 self.send_header(h, v)
         self.end_headers()
+        self.radio.note_listener(mount, True)
         try:
             while True:
                 chunk = up.read(16384)
@@ -719,12 +898,140 @@ class Handler(http.server.BaseHTTPRequestHandler):
             pass  # the listener hung up
         except Exception:
             pass  # icecast or the relay died mid-stream
+        finally:
+            self.radio.note_listener(mount, False)
+
+    def ring_stream(self, st, lag, frm, client=None):
+        """Serve a buffered listener from the Ring: at lag it starts that many seconds
+        behind live, with from it resumes exactly where its last connection ended, so a
+        phone whose network blinked replays what it missed at line speed. Plain URL
+        listeners never come here; they keep the live icecast path above."""
+        radio, slug = self.radio, st["slug"]
+        ring = radio.rings.get(slug)
+        if ring is None:
+            self.reply(404, b"station not recording\n", "text/plain")
+            return
+        with ring.cond:
+            if frm is not None:
+                pos = max(ring.start, min(frm, ring.end))
+            elif lag:
+                pos = max(ring.start, ring.end - int(lag) * AUDIO_BPS)
+            else:
+                pos = ring.start
+        mine, pos = ring.attach(client, pos)
+        # Headers in icecast's shape: Safari's native <audio> plays endless streams it
+        # recognises as internet radio (icy-*), and its MSE-less path is what iPhones use.
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("icy-name", st["name"])
+        self.send_header("icy-br", "128")
+        self.send_header("icy-public", "0")
+        with ring.cond:
+            self.send_header("X-Ring-End", str(ring.end))   # the live edge, for the page's delay line
+        self.send_header("X-Ring-From", str(pos))
+        self.end_headers()
+        radio.note_listener(radio.mount(st), True)
+        t0, why, sent = time.time(), "eof", 0
+        h = self.headers
+        self.log_message("ring open %s %s pos=%d range=%s ua=%s", slug, client, pos,
+                         h.get("Range"), (h.get("User-Agent") or "")[:40])
+        try:
+            for chunk in ring.read_from(pos, lambda: radio.rings.get(slug) is not ring):
+                self.wfile.write(chunk)
+                sent += len(chunk)
+                with ring.cond:
+                    mine["upto"] = max(mine["upto"], pos + sent)
+                    mine["t"] = time.time()
+        except (BrokenPipeError, ConnectionResetError):
+            why = "hangup"
+        except Exception as e:
+            why = "error " + type(e).__name__
+        finally:
+            with ring.cond:
+                mine["conns"] -= 1
+                mine["t"] = time.time()
+            self.log_message("ring close %s %s %s bytes=%d secs=%.1f", slug, client, why, sent, time.time() - t0)
+            radio.note_listener(radio.mount(st), False)
+
+    def hls(self, path, params):
+        """/<slug>.m3u8 is the station's playlist; /hls/<slug>/<seq>.mp3 one segment."""
+        radio = self.radio
+        if path.endswith(".m3u8"):
+            slug = path[1:-5]
+        else:
+            parts = path.split("/")          # ["", "hls", slug, "<seq>.mp3"]
+            slug = parts[2] if len(parts) == 4 else ""
+        ring = radio.rings.get(slug)
+        if ring is None:
+            self.reply(404, "station not recording\n", "text/plain")
+            return
+        with radio.lock:
+            radio.last_listen = time.time()  # an HLS listener keeps the relays awake too
+        c = params.get("c", "")
+        query = "?c=" + c if c else ""
+        if path.endswith(".m3u8"):
+            try:
+                behind = float(params.get("start", "180"))
+            except ValueError:
+                behind = 180.0
+            body = ring.playlist(f"/hls/{slug}", max(0.0, behind), query)
+            if body is None:
+                self.reply(503, "tape still empty\n", "text/plain")
+                return
+            data = body.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        try:
+            seq = int(path.rsplit("/", 1)[1].split(".")[0])
+        except ValueError:
+            seq = -1
+        data = ring.segment_bytes(seq)
+        if data is None:
+            self.reply(404, "segment no longer on the tape\n", "text/plain")
+            return
+        if c:
+            with ring.cond:
+                if len(ring.hls) > 50:
+                    for k in [k for k, v in ring.hls.items() if time.time() - v["t"] > 600]:
+                        del ring.hls[k]
+                h = ring.hls.setdefault(c, {"bytes": 0, "t": time.time()})
+                h["bytes"] += len(data)
+                h["seq"], h["t"] = seq, time.time()
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "max-age=600")
+        self.end_headers()
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
         path, _, query = self.path.partition("?")
+        params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
+        if path.endswith(".m3u8") or path.startswith("/hls/"):
+            self.hls(path, params)
+            return
         mount = self.mount_routes(path)
         if mount:
-            self.stream(mount)
+            if params.get("lag") or params.get("from"):
+                st = self.radio.station_by_mount(mount)
+                if st:
+                    frm = params.get("from")
+                    self.ring_stream(st, params.get("lag"),
+                                     int(frm) if frm and frm.lstrip("-").isdigit() else None,
+                                     params.get("c"))
+                else:
+                    self.reply(404, "not found", "text/plain")
+            else:
+                self.stream(mount)
         elif path.startswith("/api/"):
             self.handle_api(path, query)
         elif path == "/":
@@ -763,14 +1070,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(404, "not found", "text/plain")
 
     def handle_api(self, path, query):
-        slug = dict(p.split("=", 1) for p in query.split("&") if "=" in p).get("slug")
+        params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
+        slug = params.get("slug")
         if path == "/api/status":
-            self.reply(200, json.dumps(self.radio.status()), "application/json")
+            self.reply(200, json.dumps(self.radio.status(params.get("c"))), "application/json")
         elif path in ("/api/on", "/api/off") and slug:
             self.reply(200, json.dumps({"ok": self.radio.set(slug, path.endswith("on"))}),
                        "application/json")
         elif path == "/api/select" and slug:
             self.reply(200, json.dumps({"ok": self.radio.select(slug)}), "application/json")
+        elif path == "/api/power":
+            self.reply(200, json.dumps({"ok": True, "powered": self.radio.power(
+                params.get("on", "1") == "1")}), "application/json")
         elif path == "/api/on-all":
             self.radio.set_all(True)
             self.reply(200, '{"ok":true}', "application/json")
@@ -829,9 +1140,9 @@ def serve():
         d.mkdir(parents=True, exist_ok=True)
     PIDFILE.write_text(str(os.getpid()))
     radio = Radio()
-    radio.respawn()
     threading.Thread(target=radio.supervisor, daemon=True).start()
     threading.Thread(target=radio.log_loop, daemon=True).start()
+    threading.Thread(target=radio.auto_off, daemon=True).start()
     threading.Thread(target=fetch_logos, daemon=True).start()
     Handler.radio = radio
     http.server.ThreadingHTTPServer(("0.0.0.0", WEB_PORT), Handler).serve_forever()
@@ -857,11 +1168,13 @@ def show_status(st):
         print("service off")
         return
     print(f"service on (pid {st['pid']}, relaying to {st['enc']} on :{ICECAST_PORT}, page on :{WEB_PORT})")
+    print("  recording " + ("on" if st.get("powered") else "off"))
     for row in st["stations"]:
         state = "on " if row["enabled"] else "off"
         detail = "live" if row["live"] else ("restarting" if row["enabled"] else "-")
         print(f"  {state}  {detail:<10} {row['name']}  :{ICECAST_PORT}{row['mount']}"
               + (f"  {row['bitrate']}k x{row['listeners']}" if row["live"] and row["bitrate"] else "")
+              + (f"  ring {row['ring']}s" if row.get("ring") else "")
               + (f"  restarts {row['restarts']}" if row["restarts"] else ""))
         if row["error"]:
             print(f"       last: {row['error']}")
@@ -876,8 +1189,8 @@ usage: radio-server.py <command> [station ...]
   down                stop the service and every relay
   restart             down, then up
   status              show each station's state (the default)
-  start <station>...  relay these stations; brings the service up if needed
-  stop <station>...   stop their relays
+  start <station>...  record these stations (switches recording on)
+  stop <station>...   mute them, leaving the rest of the recording alone
   web                 run in the foreground, for debugging
   logos [--force]     fetch station logos
 
