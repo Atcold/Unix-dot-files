@@ -258,7 +258,7 @@ def watch():
             sys.stdout.write("\033[H\033[2J" + "\n".join(lines) + "\n")
             sys.stdout.flush()
             if old and select.select([sys.stdin], [], [], 2)[0]:
-                if sys.stdin.read(1) in "qQ":
+                if os.read(fd, 1) in (b"q", b"Q"):   # straight from the terminal: no buffer to hide keys in
                     break
             elif not old:
                 time.sleep(2)
@@ -314,10 +314,8 @@ COMMANDS = [("mpv", "[args]", "Play in the terminal. What a bare radio runs; ext
             ("status", "", "The droid: recording, each station's relay, tape and piece, who is listening."),
             ("watch", "", "The same, live, with the event log underneath ([q] quits)."),
             ("log", "[-f]", "The event log: taps, pauses, stops, offline and back, refills; -f follows it."),
-            ("on", "", "Recording on: every relay and its tape; starts the service first if it is down."),
-            ("off", "", "Recording off."),
-            ("start", "<station>...", "Record stations, by slug, number, or a word of the name."),
-            ("stop", "<station>...", "Mute stations, leaving the rest of the recording alone."),
+            ("record", "[station...]", "Record stations on tape: all of them, or the ones named; starts the service if it is down."),
+            ("stop", "[station...]", "Stop recording stations on tape: all of them, or the ones named."),
             ("up", "", "Start the service on the droid."),
             ("down", "", "Stop the service on the droid."),
             ("restart", "[-y]", "Down, then up; it asks first, because every tape empties."),
@@ -344,7 +342,7 @@ def usage():
 def main(argv):
     cmd, rest = (argv[0], argv[1:]) if argv else ("mpv", [])
     if LOCAL and cmd in ("mpv", "deploy", "logos"):
-        sys.exit(f"radio {cmd} runs on a Mac; on the droid: status, watch, log, on, off, start, stop, up, down, restart")
+        sys.exit(f"radio {cmd} runs on a Mac; on the droid: status, watch, log, record, stop, up, down, restart")
     if cmd == "mpv":
         os.execvp("mpv", ["mpv", "--profile=radio", "--playlist=~~/radio.m3u", *rest])
     elif cmd == "status":
@@ -356,21 +354,31 @@ def main(argv):
         watch()
     elif cmd == "log":
         log("-f" in rest)
-    elif cmd in ("on", "off"):
+    elif cmd in ("record", "stop") and not rest:   # the whole recording, as the page's REC switch
         try:
             api("/api/status")
         except OSError as e:
-            if cmd == "off" or not isinstance(getattr(e, "reason", e), ConnectionRefusedError):
+            if cmd == "stop" or not isinstance(getattr(e, "reason", e), ConnectionRefusedError):
                 raise
             droid("up")                  # recording needs the service: bring it up first
             settle(True)
-        r = urllib.request.urlopen(f"http://{HOST}:8080/api/power?on={1 if cmd == 'on' else 0}", timeout=10)
-        say(("recording " + f"{GREEN}on{R}") if json.load(r).get("powered") else "recording off")
-    elif cmd in ("start", "stop"):
-        if not rest:
-            sys.exit(f"radio {cmd} <station>...")
-        droid(cmd, *rest)
-        time.sleep(4 if cmd == "start" else 1)   # a starting relay needs a moment to go live
+        if cmd == "record":                          # every station, and no mutes left over
+            urllib.request.urlopen(f"http://{HOST}:8080/api/on-all", timeout=10).read()
+        else:
+            urllib.request.urlopen(f"http://{HOST}:8080/api/power?on=0", timeout=10).read()
+        say(f"{GREEN}● recording every station{R}" if api("/api/status")["powered"] else "○ not recording")
+    elif cmd in ("record", "stop"):                 # named stations only
+        st = api("/api/status")
+        named = [x["slug"] for i, x in enumerate(st["stations"])
+                 if any(q == x["slug"] or q.lower() in x["name"].lower() or q == str(i + 1) for q in rest)]
+        if not named:
+            sys.exit("no station matches " + " ".join(rest))
+        if cmd == "record" and not st["powered"]:   # recording was off: only the named ones start
+            for x in st["stations"]:
+                if x["slug"] not in named:
+                    urllib.request.urlopen(f"http://{HOST}:8080/api/off?slug={x['slug']}", timeout=10).read()
+        droid("start" if cmd == "record" else "stop", *named)
+        time.sleep(4 if cmd == "record" else 1)   # a starting relay needs a moment to go live
         st = api("/api/status")
         for x in st["stations"]:
             if any(q == x["slug"] or q.lower() in x["name"].lower() or q == str(st["stations"].index(x) + 1)
