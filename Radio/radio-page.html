@@ -1,0 +1,327 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"><title>AlfDROID radio</title><style>
+:root{color-scheme:dark}
+body{background:#000;color:#eaeaea;font-family:"Cascadia Code",ui-monospace,Menlo,monospace;
+margin:0 auto;max-width:640px;padding:170px 16px 24px}
+header{display:flex;align-items:center;gap:8px;padding:0 4px}
+header svg{width:26px;height:26px;vertical-align:-5px;margin-left:4px}
+h1{font-size:20px;font-weight:700;margin:0;flex:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+h1.on{color:#80b1d3}   /* debug is on: tap the title again to leave it */
+#svc{font-size:10px;color:#6f6f6f;text-align:right;line-height:1.3;white-space:pre}
+.bar{display:flex;align-items:center;gap:14px;font-size:13px;color:#9a9a9a;margin-bottom:16px;flex-wrap:wrap}
+.mrow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid #1c1c1c}
+#acts{position:fixed;left:0;right:0;bottom:0;background:#0a0a0a;border-top:1px solid #1c1c1c;
+padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:none;flex-wrap:nowrap;gap:6px;align-items:center;
+max-width:640px;margin:0 auto;box-sizing:border-box;z-index:3}
+.mrow.playing{background:#0d0d0d;border-left:3px solid;padding-left:3px}
+img.logo{width:44px;height:44px;border-radius:8px;object-fit:contain;background:#101010;flex:none;padding:3px;box-sizing:border-box}
+img.raster{background:none;padding:0}
+img.mono{object-fit:cover;object-position:0 50%;padding:0}   /* the monogram box only: the name sits beside it */
+img.ink{background:#efefef;filter:invert(1) hue-rotate(180deg)}   /* the filter turns this ground dark */
+.tile{width:44px;height:44px;border-radius:8px;background:#0d0d0d;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;border:1px solid}
+.text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-size:12px;white-space:nowrap;color:#9a9a9a;overflow:hidden;text-overflow:ellipsis}
+.st.live{color:#b3de69}.st.warn{color:#fdb462}
+button{background:none;border:1px solid #3a3a3a;color:#9a9a9a;border-radius:6px;padding:2px 8px;
+font:inherit;font-size:11px;flex:none}
+footer{display:none;margin-top:18px;font-size:11px;color:#6f6f6f;overflow-wrap:anywhere}   /* setup notes: debug only */
+h2.pl{font-size:11px;font-weight:400;color:#6f6f6f;margin:8px 0 6px;letter-spacing:.08em}
+.prow{display:flex;gap:10px;padding:5px 0 6px 4px;align-items:baseline}
+.ptime{flex:none;color:#6f6f6f}
+.pgrp{display:flex;gap:10px;align-items:baseline;margin:10px 0 2px;border-bottom:1px solid #232323;padding-bottom:3px}
+.pgrp-name{font-weight:700}
+.pwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pc{font-weight:600;color:#eaeaea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pw{font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player{position:fixed;top:0;left:0;right:0;background:#0a0a0a;border-bottom:1px solid #1c1c1c;
+padding:calc(10px + env(safe-area-inset-top)) 10px 8px;display:flex;flex-direction:column;gap:6px;
+max-width:640px;margin:0 auto;box-sizing:border-box}
+#bar-ctl{display:flex;align-items:center;justify-content:space-between;gap:9px}
+#player button{font-size:17px;padding:9px 13px;border-radius:22px;line-height:0}
+#bar-tgl{border-color:#8dd3c7;color:#8dd3c7}
+#bar-stop{color:#9a9a9a}
+#bar-stop:disabled{opacity:.35}
+#tape{position:relative;height:9px;background:#1c1c1c;border-radius:4px;margin:2px 2px}
+#tscale,#tlegend{position:relative;height:15px;font-size:11px;color:#9a9a9a;margin:0 2px}
+#tscale span,#tlegend span{position:absolute;white-space:nowrap}
+#tscale span{transform:translateX(-50%)}
+#tscale span:first-child{transform:none}
+#tscale span:last-child{transform:translateX(-100%)}
+#gauge-row{display:none;align-items:center;gap:10px;padding:0 2px}
+#gauge{flex:1;min-width:80px;height:8px;background:#1c1c1c;border-radius:4px;overflow:hidden}
+#g-fill{display:block;height:100%;width:0;border-radius:4px;background:#80b1d3}
+#g-txt{flex:none;width:5ch;text-align:right;font-size:12px;color:#9a9a9a;white-space:nowrap}
+#g-txt.warn{color:#fdb462}
+#dbgbox{display:none;margin:10px 2px}
+#pick .logo,#pick .tile{width:26px;height:26px;border-radius:6px;font-size:11px}
+#pick-caret{flex:none;color:#6f6f6f;font-size:13px}
+#tape-fill{position:absolute;top:0;bottom:0;border-radius:4px;background:#80b1d3;opacity:.85}
+#tape-tgt{position:absolute;top:0;bottom:0;width:2px;background:#555}
+#tape-head{position:absolute;top:-2px;bottom:-2px;width:3px;background:#fff;border-radius:2px}
+#bar-piece{display:flex;flex-direction:column;gap:1px;padding:0 4px;min-height:32px}
+#bar-artist,#bar-title{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.3}
+#bar-artist{font-size:13px;font-weight:600;color:#eaeaea}
+#bar-title{font-size:12px;color:#9a9a9a}
+#dbg{font-size:11px;color:#80b1d3;white-space:pre-wrap;margin:8px 0 0;line-height:1.6}
+#bar-pw.on{border-color:#b3de69;color:#b3de69}
+#acts button{flex:1 1 auto;font-size:12px;padding:11px 4px;border-radius:10px;white-space:nowrap}
+#mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:4}
+#menu{position:fixed;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top));width:min(640px,calc(100% - 24px));
+background:#0a0a0a;border:1px solid #2a2a2a;border-radius:14px;padding:6px 10px;display:none;z-index:5;
+max-height:62vh;overflow-y:auto;box-shadow:0 6px 24px rgba(0,0,0,.7)}
+.pdot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid #3a3a3a;background:transparent}
+#pick{flex:1;min-width:0;border-color:#3a3a3a;font-size:16px;padding:7px 14px 7px 8px;border-radius:22px;display:flex;align-items:center;gap:9px;line-height:0}
+#pick-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;line-height:1.3;text-align:left}
+</style></head><body><h2 class=pl>queue</h2><div id=played></div><div id=dbgbox><div id=tapewrap><div id=tscale></div><div id=tape><span id=tape-fill></span><span id=tape-tgt></span><span id=tape-head></span></div><div id=tlegend><span id=tl-heard>already heard</span><span id=tl-held>on the phone</span></div></div><pre id=dbg></pre></div><div id=mask onclick="menu(0)"></div><div id=menu>%%MENU%%</div><div id=player><header><h1 id=dbglink onclick="dbg()">AlfDROID radio %%ICON%%</h1><span id=svc></span></header><div id=bar-ctl><button id=pick onclick="menu(1)"><span id=pick-art></span><span id=pick-name>radio</span><span id=pick-caret>▾</span></button><button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button><button id=bar-stop onclick="stop()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button></div><div id=bar-piece><span id=bar-artist></span><span id=bar-title></span></div><div id=gauge-row><span id=gauge><span id=g-fill></span></span><span id=g-txt></span></div></div><footer>%%FOOT%%</footer><div id=acts><button id=bar-pw onclick="pw()">recording</button><button onclick="rst()">↺ reset</button><button onclick="location.reload()">⟳ reload</button><button onclick="dbg()">debug off</button></div><script>%%VARS%%</script>
+<script>
+var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
+var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
+var TGT=180;                         // the page always listens three minutes behind live,
+                                     // a Manhattan tunnel run in the phone's own memory
+var BUILD="d29";   // client stamp, shown by the debug panel: bump on every client ship
+var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
+var DL=0,DLr=0,DLp=0,DLt=0,DLc=null,DLu=0;  // bytes downloaded since the tap, and the rate
+function dlrate(){var t=Date.now();if(!DLt){DLt=t;DLp=DL;return}
+  var dt=(t-DLt)/1000;if(dt<1.5)return;
+  DLr=DLr*0.5+(DL-DLp)/dt*0.5;DLp=DL;DLt=t}       // smoothed over the last few seconds
+function kb(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':Math.round(n/1024)+' kB'}
+ST.forEach(function(s){COL[s.name]='#'+s.colour});
+(function(){var h='',m=Math.floor(RSEC/60);          // the tape's scale: one mark per minute
+  for(var i=m;i>=0;i--)h+='<span style="left:'+(100*(RSEC-60*i)/RSEC)+'%">'+(i?'−'+i+(i===m?' min':''):'now')+'</span>';
+  rep('tscale').innerHTML=h})();
+var DARKART={'radio-swiss-classic':1,'radio-swiss-jazz':1,'jazz24':1,'secret-agent':1,'rai-radio-classica':1},   // logos/<slug>-dark.img on the droid
+    MONO={'venice-classic-radio':1};
+document.querySelectorAll('#menu img.logo').forEach(function(im){
+  var slug=im.getAttribute('src').replace('/logo/','');
+  if(DARKART[slug])im.src='/logo/'+slug+'-dark';
+  if(MONO[slug])im.classList.add('mono');
+  if(DARKART[slug])im.classList.remove('ink')});   // dark versions are drawn for the dark tile
+var ICONS={play:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><path d='M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z'/></svg>",
+pause:"<svg viewBox='0 0 24 24' width='18' height='18' fill='currentColor'><rect x='6' y='4' width='4.5' height='16' rx='1.5'/><rect x='13.5' y='4' width='4.5' height='16' rx='1.5'/></svg>"};
+function rep(id){return document.getElementById(id)}
+function st_of(slug){for(var i=0;i<ST.length;i++)if(ST[i].slug===slug)return ST[i];return{}}
+function short(n){return (n||'').replace(/\bRadio\b\s*/,'').trim()||n||'radio'}
+function menu(on){rep('mask').style.display=on?'block':'none';var m=rep('menu');m.style.display=on?'block':'none';
+  if(on)m.style.top=(rep('player').offsetHeight+6)+'px'}   // opens just under the bar
+function behind(){                     // seconds the playhead sits behind the live edge
+  if(sb){if(!END||pos==null)return null;  // MSE: the fetched edge, back by what is buffered
+    return (END+(Date.now()-ENDT)*BPS/1000-pos)/BPS+ahead()}
+  if(HLS&&snd){var d=snd.getStartDate?snd.getStartDate().getTime():NaN;   // HLS: the playlist's
+    if(!isNaN(d))return Math.max(0,(Date.now()-d)/1000-snd.currentTime);  // wall clock
+    return null}
+  if(!ME||!snd)return null;            // native: the droid's live edge against our playhead
+  return Math.max(0,(ME.end+(Date.now()-MET)*BPS/1000-head())/BPS)}
+function head(){return ME.anchor+snd.currentTime*BPS}   // the Ring byte the phone is playing
+var DBGP=false;try{DBGP=localStorage.getItem('radio-dbg')==='1'}catch(e){}
+function dbg(){DBGP=!DBGP;try{localStorage.setItem('radio-dbg',DBGP?'1':'0')}catch(e){}applydbg();setBar()}
+function applydbg(){rep('played').style.display=DBGP?'none':'block';
+  rep('dbgbox').style.display=DBGP?'block':'none';document.querySelector('footer').style.display=DBGP?'block':'none';rep('acts').style.display=DBGP?'flex':'none';
+  rep('dbglink').className=DBGP?'on':'';
+  var h=document.querySelector('h2.pl');if(h)h.style.display=DBGP?'none':'block'}
+function dbgtext(){
+  if(!want)return 'idle · tap a station';
+  var rows=[],r=null;
+  if(S)S.stations.forEach(function(x){if(x.slug===now)r=x});
+  rows.push('build '+BUILD+' · tape: '+(powered?'recording · '+(RNG[now]!=null?RNG[now]:'?')+'/'+RSEC+' s held':'OFF')+
+    (navigator.onLine===false?' · phone offline':''));
+  if(r)rows.push('relay: '+(r.live?'live':'restarting')+' · '+(r.bitrate||128)+'k · x'+r.listeners+
+    (r.restarts?' · restarts '+r.restarts:'')+(r.error?'\n  '+r.error.slice(0,90):''));
+  rows.push('download: '+(DLr>=1024?Math.round(DLr/1024)+' kB/s':'idle')+' · '+kb(DL)+' since the tap');
+  var d=behind();
+  rows.push('phone buffer: '+Math.round(ahead())+'/'+TGT+' s ahead'+
+    (d!=null?' · playing '+(d/60>=1.5?(d/60).toFixed(1)+' min':Math.round(d)+' s')+' behind live':''));
+  rows.push(sb?'pump: pos '+(pos==null?'—':pos)+' · retry '+retrySeq+
+              '\n  '+stat:(HLS?'hls: segment '+(ME&&ME.seg!=null?ME.seg:'—'):'native: '+(ME&&ME.conns!=null?ME.conns+' open conn':'no count yet'))+' · retry '+retrySeq+
+              '\n  '+stat);
+  return rows.join('\n')}
+function mmss(x){x=Math.max(0,Math.round(x));return Math.floor(x/60)+':'+String(x%60).padStart(2,'0')}
+function gauge(){                      // the buffer's length, and a word only when something is off
+  if(!want||!now)return null;
+  var a=snd?ahead():0,m=null;
+  if(stat&&/retrying|connecting|lost|waiting|cannot/.test(stat)&&!(Date.now()-lastbeat<4500))m=stat;
+  else if(!snd||Date.now()-started<1500&&!a)m='connecting…';
+  else if(snd.paused)m='paused';
+  else if(navigator.onLine===false)m='offline';
+  return{t:snd&&(a||!m)?mmss(a):'–:––',f:a,w:a<60||!!m,m:m}}
+function setBar(){
+  var st=st_of(now);
+  var pc=(now&&titles[now])||'',i=pc.indexOf(' - ');   // stations send 'artist - title'
+  rep('bar-artist').textContent=i<0?pc:pc.slice(0,i);rep('bar-title').textContent=i<0?'':pc.slice(i+3);
+  var playing=want&&snd&&!snd.paused&&Date.now()-lastbeat<6000;
+  rep('bar-tgl').innerHTML=playing?ICONS.pause:ICONS.play;rep('bar-stop').disabled=!want;
+  rep('pick-name').textContent=now?(st.name||''):'choose a station';
+  rep('pick').style.color=now&&st.colour?'#'+st.colour:'';
+  var art=rep('pick-art'),src=now&&rep('row-'+now)&&rep('row-'+now).querySelector('img,.tile');
+  if(art.dataset.slug!==(now||'')){art.dataset.slug=now||'';art.innerHTML='';if(src)art.appendChild(src.cloneNode(true))}
+  var g=gauge(),gr=rep('gauge-row'),q=rep('svc');           // the top-right corner: service, or what is off
+  q.textContent=g&&g.m?g.m.replace(' · ','\n'):svcText;q.style.color=g&&g.m?'#fdb462':'';
+  if(!g)gr.style.display='none';
+  else{gr.style.display='flex';var tx=rep('g-txt');tx.textContent=g.t;tx.style.color=st.colour?'#'+st.colour:'';
+    var fl=rep('g-fill');fl.style.width=(g.f!=null?Math.min(100,100*g.f/TGT):0)+'%';
+    fl.style.background=g.w?'#fdb462':(st.colour?'#'+st.colour:'#80b1d3')}
+  var ph=rep('player').offsetHeight+12;if(document.body.style.paddingTop!==ph+'px')document.body.style.paddingTop=ph+'px';
+  if(DBGP){var tp=rep('tape');                          // the tape plane: left = oldest held,
+  if(want&&snd){var A=ahead(),P=behind();                // right = the live edge on the droid
+    if(P==null){rep('tapewrap').style.display='none'}
+    else{rep('tapewrap').style.display='block';P=Math.min(P,RSEC);
+      var hx=100*(RSEC-P)/RSEC,bx=100*(RSEC-Math.max(0,P-A))/RSEC,f=rep('tape-fill');
+      f.style.left=hx+'%';f.style.width=Math.max(0,bx-hx)+'%';
+      f.style.background=st.colour?'#'+st.colour:'#80b1d3';
+      rep('tape-head').style.left=Math.min(99,hx)+'%';
+      rep('tape-tgt').style.left=(100*(RSEC-TGT)/RSEC)+'%';   // the −3 min mark
+      var hd=rep('tl-heard');hd.style.left='0';hd.style.display=hx>30?'inline':'none';
+      var hl=rep('tl-held');hl.style.right='0';hl.style.display=bx-hx>40?'inline':'none';
+      hl.style.color=f.style.background}}
+  else rep('tapewrap').style.display='none'}
+  ST.forEach(function(s){var r=rep('row-'+s.slug);
+    if(r){r.classList.toggle('playing',s.slug===now&&want);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
+  if(now&&titles[now]&&navigator.mediaSession)
+    navigator.mediaSession.metadata=new MediaMetadata({title:titles[now],album:st.name,artist:'AlfDROID radio'});
+  if(DBGP)rep('dbg').textContent=dbgtext();}
+function ahead(){if(!snd)return 0;
+  if(sb||HLS){var b=snd.buffered,t=snd.currentTime;      // MSE and HLS: the real buffered range
+    for(var i=0;i<b.length;i++)if(b.start(i)<=t+0.5&&t<=b.end(i))return Math.max(0,b.end(i)-t);
+    return 0}
+  if(!ME)return 0;                     // native: bytes the droid delivered past our playhead
+  return Math.max(0,(ME.upto-head())/BPS)}
+function kill(){if(abort){try{abort.abort()}catch(e){}}abort=null;
+  if(snd){snd.pause();snd.src='';snd=null}
+  try{if(ms&&ms.readyState==='open')ms.end()}catch(e){}
+  ms=null;sb=null;pos=null;END=0;ENDT=0}
+function native(){return /native|hls/.test(location.search)||!window.MediaSource||!MediaSource.isTypeSupported('audio/mpeg')}
+var HLS=false;   // Safari's own HLS player: it buffers a playlist of 6 s segments by the book
+function mk(keep){if(!now)return;            // keep: carry on from the spot the phone was playing
+  var at=keep&&snd&&!sb?(HLS?behind():ME?Math.round(head()):null):null;
+  kill();stat='';if(!keep)retrySeq=0;lastbeat=Date.now();var st=st_of(now);
+  if(native()){                                 // iOS Safari has no MSE: its native player streams it
+    CID=Math.random().toString(36).slice(2,10);ME=null;
+    snd=new Audio();snd.preload='auto';
+    HLS=!/native/.test(location.search)&&!!snd.canPlayType('application/vnd.apple.mpegurl');
+    var room=RNG[now]!=null?RNG[now]-8:TGT;   // Safari ignores a start beyond the playlist and jumps
+    if(HLS)snd.src='/'+now+'.m3u8?c='+CID+'&start='+Math.max(6,Math.min(room,at!=null?at:TGT)).toFixed(0);   // to live
+    else snd.src=st.url+'?'+(at!=null?'from='+at:'lag='+TGT)+'&c='+CID;
+    snd.onended=snd.onerror=function(){if(want&&snd===this)retry('waiting for station',function(){mk(1)})};
+    snd.play().catch(function(){});
+    setTimeout(refresh,1500);
+    return}
+  snd=new Audio();
+  snd.src=URL.createObjectURL(ms=new MediaSource());
+  ms.addEventListener('sourceopen',function(){
+    try{sb=ms.addSourceBuffer('audio/mpeg');sb.mode='sequence'}catch(e){stat='this browser cannot play the buffered mode';setBar();return}
+    pump()});
+  snd.play().catch(function(){});}
+function pump(){if(!want||!ms||!sb)return;var ac=new AbortController();abort=ac;
+  var st=st_of(now),u=st.url+'?lag='+TGT+(pos!=null?'&from='+pos:'');
+  fetch(u,{signal:ac.signal}).then(function(r){
+    if(!r.ok||!r.body){retry('waiting for station');return}
+    if(pos==null){var rf=+r.headers.get('X-Ring-From');pos=isNaN(rf)?0:rf}
+    var re=+r.headers.get('X-Ring-End');if(!isNaN(re)){END=re;ENDT=Date.now()}
+    var rd=r.body.getReader();
+    function step(){return rd.read().then(function(o){
+      if(ac!=abort||!want)return;
+      retrySeq=0;
+      if(o.done){retry('waiting for station');return}
+      if(o.value&&o.value.length){
+        var data=o.value;DL+=data.length;
+        var push=function(){sb.appendBuffer(data);pos+=data.length};
+        if(sb.updating)sb.addEventListener('updateend',push,{once:true});else push()}
+      if(ahead()>TGT+8)return new Promise(function(res){setTimeout(res,1500)}).then(step);
+      return step()})}
+    return step()}).catch(function(){if(ac==abort&&want)retry('connection lost')})}
+function retry(msg,fn){if(!want)return;
+  var n=[1,2,3,5,8,15][Math.min(5,retrySeq)];retrySeq++;
+  var end=Date.now()+n*1000,ac=abort;abort=null;
+  if(ac){try{ac.abort()}catch(e){}}
+  var tick=setInterval(function(){
+    stat=Date.now()>=end?'connecting…':msg+' · retrying in '+Math.ceil((end-Date.now())/1000)+' s';
+    setBar();
+    if(Date.now()>=end){clearInterval(tick);if(want&&(!abort||ac==abort))(fn||pump)()}},400)}
+function resume(){stat='';if(sb){if(abort){try{abort.abort()}catch(e){}}pump()}else mk(1)}
+function playRow(slug,ev){if(ev)ev.stopPropagation();
+  if(ev&&(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT'))return;
+  menu(0);                     // a row tap only ever turns that station on
+  now=slug;want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;
+  fetch('/api/select?slug='+slug);setTimeout(refresh,400);
+  mk();setBar();}
+function rst(){                // ↺: throw the late buffer away and re-anchor at 3 min behind live
+  if(!want||!now)return;mk();setBar();}
+function lastSlug(){           // queue head names the station you last had
+  if(lastName)for(var i=0;i<ST.length;i++)if(ST[i].name===lastName)return ST[i].slug;
+  return ST.length?ST[0].slug:null;}
+function tgl(){                // ▶ / ⏸: pause holds the spot, ▶ carries on from it
+  if(!want){if(!now)now=lastSlug();
+    if(!now){menu(1);return}
+    want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;fetch('/api/select?slug='+now);mk();setBar();return}
+  if(snd&&snd.paused){lastbeat=Date.now();snd.play().catch(function(){});setBar();return}
+  if(snd&&Date.now()-lastbeat>6000){resume();return}   // stalled: poke the stream
+  if(snd)snd.pause();setBar();}
+function stop(){               // ■: close the stream; the next ▶ starts fresh at −3
+  if(!want)return;want=false;kill();stat='';setBar();}
+function pw(){fetch('/api/power?on='+(powered?0:1));setTimeout(refresh,400)}
+function refresh(){
+  fetch('/api/status'+(CID?'?c='+CID+(snd?'&t='+snd.currentTime.toFixed(1)+'&p='+(snd.paused?1:0)+  // the player's own state,
+    '&rs='+snd.readyState+'&b='+(snd.buffered.length?(snd.buffered.end(snd.buffered.length-1)-snd.currentTime).toFixed(1)+'r'+snd.buffered.length:'none')+'&ns='+snd.networkState+'&e='+(snd.error?snd.error.code:0)+'&m='+(snd.muted?1:0)+'&v='+snd.volume:''):'')).then(function(r){return r.json()}).then(function(s){
+    powered=!!s.powered;var p=rep('bar-pw');
+    p.textContent=powered?'recording on':'recording off';
+    p.className=powered?'on':'';
+    enabled=[];
+    s.stations.forEach(function(st){
+      if(st.enabled){enabled.push(st.slug)}
+      if(st.title)titles[st.slug]=st.title;
+      BR[st.slug]=st.bitrate;RNG[st.slug]=st.ring;
+      if(st.slug===now&&st.me){ME=st.me;MET=Date.now();
+        if(ME.hls!=null){if(DLc!==CID){DLc=CID;DLu=0}DL+=Math.max(0,ME.hls-DLu);DLu=Math.max(DLu,ME.hls)}
+        else if(ME.upto!=null){if(DLc!==CID){DLc=CID;DLu=ME.anchor}DL+=Math.max(0,ME.upto-DLu);DLu=Math.max(DLu,ME.upto)}}
+      var e=rep('st-'+st.slug);if(!e)return;
+      if(!powered){e.textContent='idle';e.className='st'}
+      else if(st.enabled&&st.live){e.textContent='live';e.className='st live'}
+      else if(st.enabled){e.textContent='restarting';e.className='st warn'}
+      else{e.textContent='muted';e.className='st'}
+    });
+    fails=now&&want&&Date.now()-started>5000&&(!powered||enabled.indexOf(now)<0)?fails+1:0;
+    if(fails>=3){want=false;kill();stat='';fails=0}   // switched off elsewhere, three polls running
+    if(!now&&enabled.length)now=enabled[0];
+    lastName=(s.recent&&s.recent.length)?s.recent[0].station:lastName;
+    ST.forEach(function(x){var d=rep('dot-'+x.slug);if(d){
+      var on=enabled.indexOf(x.slug)>=0;
+      d.style.background=on?'#'+x.colour:'transparent';
+      d.style.borderColor=on?'#'+x.colour:'#3a3a3a'}});
+    var el=rep('played');el.innerHTML='';
+    var last=null;
+    (s.recent||[]).forEach(function(r){
+      if(r.station!==last){var h=document.createElement('div');h.className='pgrp';
+        var ht=document.createElement('span');ht.className='ptime';ht.textContent=r.time;
+        var hn=document.createElement('span');hn.className='pgrp-name';hn.textContent=r.station;
+        if(COL[r.station])hn.style.color=COL[r.station];
+        h.appendChild(ht);h.appendChild(hn);el.appendChild(h);last=r.station}
+      var d=document.createElement('div');d.className='prow';
+      var a=document.createElement('span');a.className='ptime';a.textContent=r.time;
+      var wrap=document.createElement('span');wrap.className='pwrap';
+      var p=r.piece,i=p.indexOf(' - ');
+      var c=document.createElement('span');c.className='pc';c.textContent=i<0?p:p.slice(0,i);
+      var w=document.createElement('span');w.className='pw';w.textContent=i<0?'':p.slice(i+3);
+      wrap.appendChild(c);wrap.appendChild(w);
+      d.appendChild(a);d.appendChild(wrap);el.appendChild(d)});
+    var d=new Date();svcText='service on\n'+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
+    setBar();
+  }).catch(function(){svcText='service off';setBar()})}
+setInterval(refresh,3000);
+setInterval(function(){                 // heartbeat: the button follows the real audio
+  dlrate();
+  if(!want||!snd){setBar();return}
+  if(!snd.paused&&snd.currentTime!=lastc){lastc=snd.currentTime;lastbeat=Date.now();retrySeq=0;
+    if(stat&&stat.indexOf('retrying')<0){stat='';}}
+  else if(!snd.paused&&Date.now()-lastbeat>(HLS?20000:6000)&&stat.indexOf('retrying')<0){   // HLS retries segments itself
+    stat='waiting for station';retry('waiting for station',sb?pump:function(){mk(1)})}
+  setBar()},2000);
+window.addEventListener('pageshow',function(e){if(e.persisted)location.reload()});
+window.addEventListener('offline',function(){stat='connection lost';setBar()});
+window.addEventListener('online',function(){   // back on the network: the MSE pump reconnects at
+  if(!want)return;stat='';                       // once; Safari's player keeps its buffer, and the
+  if(sb&&!abort)pump();setBar()});               // stall watch rebuilds it only if the music stops
+refresh();applydbg();
+if(navigator.mediaSession){
+  navigator.mediaSession.setActionHandler('play',function(){if(!want||snd&&snd.paused)tgl()});
+  navigator.mediaSession.setActionHandler('pause',function(){if(want&&snd&&!snd.paused)tgl()});
+  try{navigator.mediaSession.setActionHandler('stop',stop)}catch(e){}}
+</script></body></html>
