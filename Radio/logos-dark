@@ -1,0 +1,91 @@
+#!/usr/bin/env -S uv run --quiet --with pillow python3
+"""Dark versions of the bright station logos, for the page's dark tiles. It fetches
+each logo from the droid's page server, draws its dark version, and copies it into
+the droid's logos folder as <slug>-dark.img, which the page asks for by name.
+
+    ./logos-dark [host]        # host defaults to alfdroid
+"""
+import io
+import subprocess
+import sys
+import tempfile
+import urllib.request
+from pathlib import Path
+
+from PIL import Image, ImageFilter
+
+HOST = sys.argv[1] if len(sys.argv) > 1 else "alfdroid"
+DARK = (16, 16, 16)
+
+
+def fetch(slug):
+    return urllib.request.urlopen(f"http://{HOST}:8080/logo/{slug}", timeout=15).read()
+
+
+def flat_ground(im):
+    """A logo on a flat coloured ground (the Swiss ones): the ground turns near-black
+    and the light strokes take the ground's own colour."""
+    im = im.convert("RGB")
+    px, (w, h) = im.load(), im.size
+    bg = px[3, h // 2]
+    ink = tuple(min(255, c + 30) for c in bg)
+    out = Image.new("RGB", im.size)
+    op = out.load()
+    for y in range(h):
+        for x in range(w):
+            p = px[x, y]
+            t = min(1.0, sum((a - b) ** 2 for a, b in zip(p, bg)) ** .5 / 120)
+            fg = ink if sum(p) > sum(bg) else (90, 90, 90)
+            op[x, y] = tuple(int(DARK[i] * (1 - t) + fg[i] * t) for i in range(3))
+    return out
+
+
+def gradient_ground(im):
+    """White letters on a gradient (Jazz24): a black ground, and the letters take the
+    gradient's colour from a blur wide enough to wipe the thin letters out."""
+    im = im.convert("RGB")
+    blur = im.filter(ImageFilter.GaussianBlur(40))
+    out = Image.new("RGB", im.size)
+    px, bp, op = im.load(), blur.load(), out.load()
+    for y in range(im.size[1]):
+        for x in range(im.size[0]):
+            w = max(0.0, min(1.0, (min(px[x, y]) - 90) / 140))
+            c = tuple(min(255, int(v * 1.35 + 25)) for v in bp[x, y])
+            op[x, y] = tuple(int(14 * (1 - w) + c[i] * w) for i in range(3))
+    return out
+
+
+def red_poster(im):
+    """A poster on a red ground (Secret Agent): the red sinks to near-black, the
+    yellow title and the light faces keep their colour."""
+    im = im.convert("RGB")
+    out = Image.new("RGB", im.size)
+    px, op = im.load(), out.load()
+    for y in range(im.size[1]):
+        for x in range(im.size[0]):
+            r, g, b = px[x, y]
+            red = r > 60 and g < 0.55 * r and b < 0.55 * r
+            op[x, y] = (int(r * .22), int(g * .22), int(b * .22)) if red else (r, g, b)
+    return out
+
+
+def rai_letters(svg):
+    """Rai's wordmark SVG cropped to its square box, and the box's fill dropped,
+    leaving the white Rai letters on the page's dark tile."""
+    s = svg.decode()
+    s = s.replace('viewBox="0 0 644.7 200"', 'viewBox="0 0 200 200"')
+    s = s.replace('<rect fill="#59662B" width="200" height="200"/>', "")
+    return s.encode()
+
+
+RASTER = {"radio-swiss-classic": flat_ground, "radio-swiss-jazz": flat_ground,
+          "jazz24": gradient_ground, "secret-agent": red_poster}
+
+with tempfile.TemporaryDirectory() as tmp:
+    for slug, draw in RASTER.items():
+        dest = Path(tmp) / f"{slug}-dark.img"
+        draw(Image.open(io.BytesIO(fetch(slug)))).save(dest, "PNG")
+    (Path(tmp) / "rai-radio-classica-dark.img").write_bytes(rai_letters(fetch("rai-radio-classica")))
+    files = sorted(str(p) for p in Path(tmp).iterdir())
+    subprocess.run(["scp", "-q", *files, f"{HOST}:.local/share/radio/logos/"], check=True)
+    print("\n".join(Path(f).name for f in files))
