@@ -81,7 +81,7 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d31";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d32";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var DL=0,DLr=0,DLp=0,DLt=0,DLc=null,DLu=0;  // bytes downloaded since the tap, and the rate
 function dlrate(){var t=Date.now();if(!DLt){DLt=t;DLp=DL;return}
@@ -311,7 +311,18 @@ function refresh(){
   }).catch(function(){svcText='service off';setBar()})}
 setInterval(refresh,3000);
 function watch(){if(!DBGP)return;                 // the debug screen shows what radio watch shows
-  fetch('/api/watch?cols=52').then(function(r){return r.ok?r.text():''}).then(function(t){rep('watch').textContent=t}).catch(function(){})}
+  fetch('/api/watch?cols=52').then(function(r){return r.ok?r.text():''}).then(function(t){rep('watch').innerHTML=ansi(t)}).catch(function(){})}
+function ansi(t){                               // the terminal's colour codes, as coloured spans
+  var h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;'),open=0;
+  h=h.replace(/\x1b\[([0-9;]*)m/g,function(_,c){var out=open?'</span>':'';open=0;
+    var p=c.split(';'),st='';
+    for(var i=0;i<p.length;i++){
+      if(p[i]==='1')st+='font-weight:700;';
+      else if(p[i]==='38'&&p[i+1]==='2'){st+='color:rgb('+p[i+2]+','+p[i+3]+','+p[i+4]+');';i+=4}
+      else if(p[i]==='38'&&p[i+1]==='5'){var n=+p[i+2],g=n>=232?8+10*(n-232):128;st+='color:rgb('+g+','+g+','+g+');';i+=2}}
+    if(st){out+='<span style="'+st+'">';open=1}
+    return out});
+  return h+(open?'</span>':'')}
 setInterval(watch,5000);
 setInterval(function(){                 // heartbeat: the button follows the real audio
   dlrate();

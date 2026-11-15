@@ -187,7 +187,8 @@ PLAIN = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 
 def say(text):
     """Colour is for the screen: into a pipe the text goes plain."""
-    print(text if sys.stdout.isatty() else PLAIN.sub("", text))
+    keep = sys.stdout.isatty() or os.environ.get("RADIO_COLUMNS")   # the page draws the colour itself
+    print(text if keep else PLAIN.sub("", text))
 
 
 def down_reason(e):
