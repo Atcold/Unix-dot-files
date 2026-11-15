@@ -30,3 +30,7 @@ Opens PDFs side by side on the screen next to the terminal:
     pdf-show a.pdf [b.pdf …]
 
 By day the files open in Skim, which reloads itself on every rebuild. After sunset they open in Preview with View ▸ Use Dark Appearance for PDF, after every Preview document is closed, because Preview names windows by file name alone. Night falls by the time zone's own sunrise and sunset (a NOAA approximation; cities for New York and Rome). The script finds the screen beside the one holding the Terminal, lays the windows in a grid of columns at least ~720 px wide, and prints which app took the files.
+
+## `radio/`
+
+The terminal radio player and the always-on streaming service share this folder. `radio` plays locally; `radio status`, `watch`, and `deploy` manage the server. See [radio/README.md](radio/README.md).

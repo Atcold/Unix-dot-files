@@ -153,7 +153,7 @@ end
 local function core_path()
   local p = os.getenv("RADIO_CORE")
   if p and p ~= "" then return p end
-  return mp.find_config_file("radio_core.py") or (os.getenv("HOME") .. "/.settings/Radio/radio_core.py")
+  return mp.find_config_file("radio_core.py") or (os.getenv("HOME") .. "/.settings/Scripts/radio/radio_core.py")
 end
 
 local CORE, warned = core_path(), false

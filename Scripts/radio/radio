@@ -22,7 +22,7 @@ from pathlib import Path
 LOCAL = "com.termux" in os.environ.get("PREFIX", "")   # running on the droid itself
 HOST = os.environ.get("RADIO_HOST", "localhost" if LOCAL else "alfdroid")
 HERE = Path(__file__).resolve().parent          # this folder: the page and the server live here
-SERVER = ".settings/Radio/radio-server.py"      # on the droid, from its home
+SERVER = ".settings/Scripts/radio/radio-server.py"      # on the droid, from its home
 
 LOG = "~/.local/share/radio/logs/requests.log"
 STATUS = re.compile(r'^(\S+) (\S+) (\S+) "GET /api/status\?c=(\w+)&t=([\d.]+)&p=(\d)&rs=\d&b=([-\d.]+|none)')
@@ -289,7 +289,7 @@ def log(follow):
 
 def deploy():
     files = ["radio-page.html", "radio-server.py", "radio_core.py", "radio"]
-    sums = subprocess.run(["ssh", HOST, "cd .settings/Radio && md5sum " + " ".join(files)],
+    sums = subprocess.run(["ssh", HOST, "cd .settings/Scripts/radio && md5sum " + " ".join(files)],
                           capture_output=True, text=True).stdout
     remote = {l.split()[1]: l.split()[0] for l in sums.splitlines() if len(l.split()) == 2}
     import hashlib
@@ -297,7 +297,7 @@ def deploy():
     if not changed:
         print("the droid already has these files")
         return
-    subprocess.run(["scp", "-q", *[str(HERE / f) for f in changed], f"{HOST}:.settings/Radio/"], check=True)
+    subprocess.run(["scp", "-q", *[str(HERE / f) for f in changed], f"{HOST}:.settings/Scripts/radio/"], check=True)
     print("copied: " + ", ".join(changed))
     if any(f.endswith(".py") for f in changed):
         if ask("the server changed: restart it now? the tapes empty"):

@@ -3,4 +3,4 @@
 # whatever was switched on last time are there without anyone touching the droid.
 # Termux:Boot has to be installed, and the screen lock set to None, or Android keeps the
 # apps asleep until someone unlocks. install.sh --boot puts this in ~/.termux/boot.
-$HOME/.settings/Radio/radio-server.py up
+$HOME/.settings/Scripts/radio/radio-server.py up

@@ -24,3 +24,5 @@ My stations, from one folder: `radio` plays them in the terminal on the Macs thr
 `python3 radio_core.py --selftest` checks the rules against titles the stations really send, and runs at the end of every install. Without python3 the Mac still plays: the script says so once and shows titles as they come.
 
 The droid itself, from a OnePlus 6 running Debian in Termux, is the `alfdroid` lesson in learning-with-claude.
+
+The source folder is `Scripts/radio/` in the settings repository. The command and mpv configuration link to this folder; the server’s boot entry uses the same location.

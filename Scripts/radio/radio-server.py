@@ -57,17 +57,17 @@ try:
     import radio_core
 except ImportError:  # a lone copy of this file: $RADIO_CORE names where the core lives
     sys.path.insert(0, str(Path(os.getenv("RADIO_CORE",
-                                          "~/.settings/Radio/radio_core.py")).expanduser().parent))
+                                          "~/.settings/Scripts/radio/radio_core.py")).expanduser().parent))
     import radio_core
 
 
 def m3u_path():
     """The playlist: $RADIO_M3U if set, else the copy install.sh links into mpv's
     config folder, else the file in this folder, which is where the Macs keep it."""
-    for cand in (os.getenv("RADIO_M3U"), "~/.config/mpv/radio.m3u", "~/.settings/Radio/radio.m3u"):
+    for cand in (os.getenv("RADIO_M3U"), "~/.config/mpv/radio.m3u", "~/.settings/Scripts/radio/radio.m3u"):
         if cand and Path(cand).expanduser().is_file():
             return Path(cand).expanduser()
-    return Path("~/.settings/Radio/radio.m3u").expanduser()
+    return Path("~/.settings/Scripts/radio/radio.m3u").expanduser()
 
 
 M3U = m3u_path()
