@@ -83,12 +83,12 @@ def frame(ip2name, with_events=True):
            f"{'on' if st['powered'] else 'OFF'} · {time.strftime('%H:%M:%S')}{R}", ""]
     cols = size().columns
     nw, rw = (22, 11) if cols >= 80 else (14, 10)   # a phone's width gets narrower columns
-    room = cols - nw - rw - 6 - 3   # the piece takes the rest, one column short of the edge
-    out.append(f"{DIM}{'station':<{nw}}{'rec':<{rw}}{'tape':>6}  piece (live){R}")
-    for s in st["stations"]:
+    room = cols - nw - rw - 6 - 3 - 3   # the piece takes the rest, one column short of the edge
+    out.append(f"{DIM}{'#':>2} {'station':<{nw}}{'rec':<{rw}}{'tape':>6}  piece (live){R}")
+    for i, s in enumerate(st["stations"], 1):   # numbered as radio record 5 takes them
         relay = ("● rec" if s["live"] else "○ stopped" if not st["powered"] or not s["enabled"]
                  else "starting")         # the same words as the page's REC switch
-        out.append(f"{rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
+        out.append(f"{DIM}{i:>2}{R} {rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
                    f"{relay[:rw - 1]:<{rw}}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
     live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]
