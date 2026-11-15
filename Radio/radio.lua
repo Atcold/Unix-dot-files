@@ -174,6 +174,30 @@ local function ask_core(args, stdin)
   return answer
 end
 
+-- Rai sends no StreamTitle, so its piece is only known by the droid, which reads it from
+-- Rai's own current-song service. Only the droid talks to Rai: the Mac asks the droid's
+-- /api/status for Rai's title instead of sniffing Rai's silent stream, the same host the
+-- radio command reaches ($RADIO_HOST, default alfdroid).
+local HOST = os.getenv("RADIO_HOST") or "alfdroid"
+
+local function is_rai(name)
+  return (name or ""):lower():find("rai") ~= nil
+end
+
+local function ask_droid(station)
+  local r = utils.subprocess({
+    args = { "python3", "-c",
+      "import json,sys,urllib.request;" ..
+      "d=json.load(urllib.request.urlopen(sys.argv[1],timeout=4));" ..
+      "s=next((s for s in d['stations'] if s['name']==sys.argv[2]),None);" ..
+      "print(json.dumps({'title':(s or {}).get('title','')}))",
+      "http://" .. HOST .. ":8080/api/status", station },
+    capture_stdout = true, playback_only = false,
+  })
+  local answer = r and r.status == 0 and utils.parse_json(r.stdout or "")
+  return answer and answer.title
+end
+
 -- One path for a title from any source: clean it, drop the station's own announcements,
 -- and ignore the announcement mpv repeats after a banner. Without python3 the stream is
 -- unaffected, so the raw title stays on screen rather than nothing.
@@ -235,8 +259,10 @@ local function channels()
   say(dim("checking " .. n .. " channels…"))
   local args = { "sniff" }
   for i = 0, n - 1 do
-    args[#args + 1] = mp.get_property("playlist/" .. i .. "/title") or ""
-    args[#args + 1] = mp.get_property("playlist/" .. i .. "/filename", "")
+    local name = mp.get_property("playlist/" .. i .. "/title") or ""
+    args[#args + 1] = name
+    -- Rai gets an empty url so the batch never touches its stream; its title comes below.
+    args[#args + 1] = is_rai(name) and "" or mp.get_property("playlist/" .. i .. "/filename", "")
   end
   local answer = ask_core(args)
   local rows = answer and answer.titles or {}
@@ -244,7 +270,7 @@ local function channels()
     local name = mp.get_property("playlist/" .. (i - 1) .. "/title") or "?"
     local colour = COLOURS[(i - 1) % #COLOURS + 1]
     local row = rows[i]
-    local title = row and row.title
+    local title = is_rai(name) and ask_droid(name) or (row and row.title)
     say((i == pos and rgb("b3de69", "►") or " ") .. " " .. rgb(colour, string.format("%3s", code_for(i) or "") .. "  " .. name) ..
         dim("   ") .. (title and title ~= "" and title or dim("—")))
   end
@@ -290,10 +316,16 @@ mp.observe_property("metadata/by-key/icy-title", "string", function(_, title) ne
 -- between the two, since both end in the same watch.
 mp.add_periodic_timer(20, function()
   if modal or mp.get_property_bool("pause", false) then return end
+  local station = on_air()
+  if is_rai(station) then            -- Rai's piece comes from the droid, never from its stream
+    local title = ask_droid(station)
+    if title then new_title(title) end
+    return
+  end
   local pos = mp.get_property_number("playlist-pos", 0)
   local url = mp.get_property("playlist/" .. pos .. "/filename", "")
   if url == "" then return end
-  local answer = ask_core({ "sniff", on_air(), url })
+  local answer = ask_core({ "sniff", station, url })
   local row = answer and answer.titles and answer.titles[1]
   if row and not row.banner then new_title(row.title) end
 end)
