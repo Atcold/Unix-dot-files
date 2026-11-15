@@ -89,7 +89,7 @@ def frame(ip2name, with_events=True):
         relay = ("●" if s["live"] else "○" if not st["powered"] or not s["enabled"]
                  else "◐")                # recording, stopped, starting: the page's REC circles
         out.append(f"{DIM}{i:>2}{R} {rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
-                   f"{rgb(s['colour'], relay)}{' ' * (rw - 1)}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
+                   f" {rgb(s['colour'], relay)}{' ' * (rw - 2)}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
     live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]
     newest = {}                              # one row per device: its latest client
