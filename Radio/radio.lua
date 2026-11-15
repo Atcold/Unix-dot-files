@@ -67,7 +67,8 @@ local shown, colour = "", COLOURS[1]   -- the last real piece, and the current s
 local function status()
   local r, g, b = tonumber(colour:sub(1, 2), 16), tonumber(colour:sub(3, 4), 16), tonumber(colour:sub(5, 6), 16)
   mp.set_property("term-status-msg", string.format(
-    "\27[38;2;%d;%d;%dm♪ %s\27[0m  \27[2m${time-pos}  ·  vol ${volume}%%\27[0m", r, g, b, shown))
+    "\27[38;2;%d;%d;%dm♪ %s\27[0m  ${?pause==yes:\27[38;2;253;180;98mpaused\27[0m  }\27[2m${time-pos}  ·  vol ${volume}%%\27[0m",
+    r, g, b, shown))   -- a paused station says so; otherwise it looks like a dead one at 00:00:00
 end
 
 local pending = nil
