@@ -81,7 +81,7 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d33";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d34";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var DL=0,DLr=0,DLp=0,DLt=0,DLc=null,DLu=0;  // bytes downloaded since the tap, and the rate
 function dlrate(){var t=Date.now();if(!DLt){DLt=t;DLp=DL;return}
@@ -163,6 +163,8 @@ function setBar(){
     var fl=rep('g-fill');fl.style.width=(g.f!=null?Math.min(100,100*g.f/TGT):0)+'%';
     fl.style.background=g.w?'#fdb462':(st.colour?'#'+st.colour:'#80b1d3')}
   var ph=rep('player').offsetHeight+12;if(document.body.style.paddingTop!==ph+'px')document.body.style.paddingTop=ph+'px';
+  var pb=(DBGP?rep('acts').offsetHeight:0)+24;   // room under the debug buttons, so nothing scrolls beneath them
+  if(document.body.style.paddingBottom!==pb+'px')document.body.style.paddingBottom=pb+'px';
   if(DBGP){var tp=rep('tape');                          // the tape plane: left = oldest held,
   if(want&&snd){var A=ahead(),P=behind();                // right = the live edge on the droid
     if(P==null){rep('tapewrap').style.display='none'}
