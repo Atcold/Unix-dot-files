@@ -325,8 +325,9 @@ def usage():
     print("  " + c("radio", "1;36") + c(" [command] [arguments]", "2"))
     print("\n" + c("Commands", "1"))
     width = max(len(n) for n, _, _ in COMMANDS) + 2
+    slots = max(len(x) for _, x, _ in COMMANDS) + 2   # every description starts in one column
     for name, slot, what in COMMANDS:
-        print(f"  {c(name.ljust(width), '1;36')}{c(slot + '  ', '2') if slot else ''}{what}")
+        print(f"  {c(name.ljust(width), '1;36')}{c(slot.ljust(slots), '2')}{what}")
     print("\n" + c("$RADIO_HOST names the droid; it defaults to alfdroid.", "2") + "\n")
 
 
