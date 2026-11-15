@@ -54,7 +54,10 @@ if [ "$ROLE" = mac ] || [ "$ROLE" = all ]; then
     rm -rf "$HOME/.config/mpv/$f"
     ln -s "$here/$f" "$HOME/.config/mpv/$f"
   done
-  echo 'Done. mpv finds them all at ~~/, so the folder name does not matter.'
+  mkdir -p "$HOME/.local/bin"
+  rm -f "$HOME/.local/bin/radio"
+  ln -s "$here/radio" "$HOME/.local/bin/radio"   # radio plays; radio help lists the rest
+  echo 'Done. mpv finds them all at ~~/, so the folder name does not matter; radio is on the PATH.'
 fi
 
 if [ "$ROLE" = droid ] || [ "$ROLE" = all ]; then

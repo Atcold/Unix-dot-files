@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""radio: my stations, in the terminal and on AlfDROID.
+
+  radio                 play in the terminal (mpv); the same as radio mpv
+  radio mpv [args]      the terminal player, extra arguments go to mpv
+  radio status          the droid: recording, each station's relay, tape and piece, who is listening
+  radio watch           the same, live, with the event log underneath   ([q] quits)
+  radio log [-f]        the event log: taps, pauses, stops, offline and back, refills; -f follows it
+  radio on | off        recording: every relay and its tape
+  radio start | stop <station>...   record or mute stations, by slug, number, or a word of the name
+  radio up | down       the service on the droid
+  radio restart         down, then up; it asks first, because the tapes empty
+  radio deploy          copy the page and the server to the droid; a server change asks to restart
+  radio logos           rebuild the dark logos on the droid
+  radio help            this
+
+$RADIO_HOST names the droid (alfdroid).
+"""
+import json, os, re, select, subprocess, sys, termios, time, tty, urllib.request
+from pathlib import Path
+
+HOST = os.environ.get("RADIO_HOST", "alfdroid")
+HERE = Path(__file__).resolve().parent          # this folder: the page and the server live here
+SERVER = ".settings/Radio/radio-server.py"      # on the droid, from its home
+
+LOG = "~/.local/share/radio/logs/requests.log"
+STATUS = re.compile(r'^(\S+) (\S+) (\S+) "GET /api/status\?c=(\w+)&t=([\d.]+)&p=(\d)&rs=\d&b=([-\d.]+|none)')
+HLS = re.compile(r'^(\S+) (\S+) (\S+) "GET /hls/([\w-]+)/(\d+)\.mp3\?c=(\w+)')
+PL = re.compile(r'^(\S+) (\S+) (\S+) "GET /([\w-]+)\.m3u8\?c=(\w+)&start=(\d+)')
+BARE = re.compile(r'^(\S+) (\S+) (\S+) "GET /api/status\?c=(\w+) HTTP')   # a page with no player: stopped
+RING = re.compile(r'^(\S+) (\S+) (\S+) ring open ([\w-]+) (\w+)')
+
+def names():
+    try:
+        st = json.loads(subprocess.run(["tailscale", "status", "--json"], capture_output=True,
+                                       text=True, timeout=5).stdout)
+        out = {}
+        for p in [st.get("Self", {})] + list(st.get("Peer", {}).values()):
+            for ip in p.get("TailscaleIPs", []):
+                out[ip] = (p.get("DNSName") or p.get("HostName") or ip).split(".")[0]
+        return out
+    except Exception:
+        return {}
+
+def rgb(hexs, s):
+    r, g, b = (int(hexs[i:i + 2], 16) for i in (0, 2, 4))
+    return f"\033[38;2;{r};{g};{b}m{s}\033[0m"
+
+GREY, DIM, ORANGE = "\033[38;5;245m", "\033[38;5;240m", "\033[38;2;253;180;98m"
+GREEN = "\033[38;2;179;222;105m"
+R = "\033[0m"
+
+def mmss(x):
+    x = max(0, round(x)); return f"{x // 60}:{x % 60:02d}"
+
+def frame(ip2name, with_events=True):
+    st = json.load(urllib.request.urlopen(f"http://{HOST}:8080/api/status", timeout=4))
+    tail = subprocess.run(["ssh", HOST, f"tail -n 4000 {LOG}"], capture_output=True,
+                          text=True, timeout=8).stdout.splitlines()
+    now = time.time()
+    col = {s["slug"]: s["colour"] for s in st["stations"]}
+    name = {s["slug"]: s["name"] for s in st["stations"]}
+    cl = {}   # client id -> facts
+    def ts(d, t): return time.mktime(time.strptime(d + " " + t, "%Y-%m-%d %H:%M:%S"))
+    for line in tail:
+        if m := STATUS.match(line):
+            d, t, ip, c, pt, p, b = m.groups()
+            cl.setdefault(c, {}).update(ip=ip, seen=ts(d, t), t=float(pt), paused=p == "1",
+                                        buf=None if b == "none" else float(b))
+        elif m := HLS.match(line):
+            d, t, ip, slug, seq, c = m.groups()
+            cl.setdefault(c, {}).update(ip=ip, slug=slug, seg=int(seq), mode="HLS", segt=ts(d, t))
+        elif m := PL.match(line):
+            d, t, ip, slug, c, start = m.groups()
+            x = cl.setdefault(c, {}); x.update(ip=ip, slug=slug, mode="HLS", start=int(start))
+            x.setdefault("began", ts(d, t))
+        elif m := RING.match(line):
+            d, t, ip, slug, c = m.groups()
+            x = cl.setdefault(c, {}); x.update(ip=ip, slug=slug, mode=x.get("mode", "stream"))
+            x.setdefault("began", ts(d, t))
+    out = [f"\033[1mAlfDROID radio\033[0m  {GREY}pid {st['pid']} · recording "
+           f"{'on' if st['powered'] else 'OFF'} · {time.strftime('%H:%M:%S')}{R}", ""]
+    room = size().columns - 42   # the piece takes the rest, one column short of the edge
+    out.append(f"{DIM}{'station':<22}{'relay':<11}{'tape':>6}  piece (live){R}")
+    for s in st["stations"]:
+        relay = ("live" if s["live"] else "off" if not st["powered"]
+                 else "restarting" if s["enabled"] else "muted")
+        out.append(f"{rgb(s['colour'], f'{s['name'][:21]:<22}')}"
+                   f"{relay:<11}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
+    out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
+    live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]
+    newest = {}                              # one row per device: its latest client
+    for c, x in sorted(live, key=lambda kv: kv[1].get("seen", 0)):
+        newest[x["ip"]] = (c, x)
+    live = list(newest.values())
+    if not live:
+        out.append(f"{GREY}  nobody{R}")
+    for c, x in sorted(live, key=lambda kv: -kv[1].get("seen", 0)):
+        dev = ip2name.get(x["ip"], x["ip"])
+        slug = x["slug"]
+        state = "paused" if x.get("paused") else "playing"
+        buf = x.get("buf")
+        bufs = "—" if buf is None else mmss(buf)
+        warn = buf is not None and buf < 60
+        quiet = now - x.get("seen", now)     # the page reports every 3 s while it is online
+        link = (f"{GREEN}● online{R}" if quiet <= 8 else f"{ORANGE}○ offline {mmss(quiet)}{R}")
+        out.append(f"  \033[1m{dev}\033[0m  {link}  {rgb(col.get(slug, '9a9a9a'), name.get(slug, slug))}"
+                   f"  {GREY}{x.get('mode', '?')} · client {c}{R}")
+        if quiet > 8:                        # offline: the buffer drains while the music plays
+            left = None if buf is None or x.get("paused") else buf - quiet
+            if left is not None:
+                out.append(f"    buffer left ≈ {ORANGE if left < 60 else ''}{mmss(left)}{R}")
+        out.append(f"    {state:<8} position {mmss(x.get('t', 0)):>6}   buffer "
+                   f"{(ORANGE if warn else '')}{bufs}{R}   "
+                   + (f"last segment {x['seg']} ({round(now - x['segt'])} s ago)" if "seg" in x else ""))
+        if "start" in x:
+            out.append(f"    {GREY}started {x['start']} s behind live at "
+                       f"{time.strftime('%H:%M:%S', time.localtime(x.get('began', now)))}{R}")
+    rows = size().lines - len(out) - 3
+    if with_events and rows > 2:
+        out += ["", f"{DIM}events, newest first{R}"] + [f"{GREY}{e[0]}{R}  {e[1]}" for e in events(tail, ip2name, col, name)[::-1][:rows]]   # newest first
+    return out
+
+def events(tail, ip2name, col, name):
+    """What happened, in order, from the droid's request log: a tap starts a new
+    client, the page's 3-second reports carry pause and resume, a silence of more
+    than 8 s between them is the phone offline, and a run of segments right after
+    is Safari refilling its buffer."""
+    ev, last, slugof, burst = [], {}, {}, {}
+    def who(ip): return ip2name.get(ip, ip)
+    def st(slug): return rgb(col.get(slug, "9a9a9a"), name.get(slug, slug))
+    def ts(d, t): return time.mktime(time.strptime(d + " " + t, "%Y-%m-%d %H:%M:%S"))
+    for line in tail:
+        if m := PL.match(line) or RING.match(line):
+            g = m.groups()
+            d, t, ip, slug, c = g[:5]
+            if c not in slugof:
+                slugof[c] = slug
+                how = f"HLS, starts {g[5]} s back" if m.re is PL else "plain stream"
+                ev.append((ts(d, t), t, f"{who(ip)}  tap {st(slug)}  {GREY}{how}{R}"))
+        elif m := HLS.match(line):
+            d, t, ip, slug, seq, c = m.groups()
+            b = burst.get(c)
+            if b and ts(d, t) - b[1] <= 2:
+                b[2] += 1; b[1] = ts(d, t)
+                if b[2] == 4:                # four in two-second steps: a refill, not the steady one per 6 s
+                    b[3] = len(ev)
+                    ev.append(None)
+                if b[3] is not None:
+                    ev[b[3]] = (b[4], b[0], f"{who(ip)}  {GREEN}refilled{R}  {b[2]} segments, {b[2] * 6} s of audio")
+            else:
+                burst[c] = [t, ts(d, t), 1, None, ts(d, t)]
+        elif m := STATUS.match(line):
+            d, t, ip, c, pt, p, b = m.groups()
+            now_t, prev = ts(d, t), last.get(c)
+            if prev:
+                gap = now_t - prev["at"]
+                if gap > 8:
+                    ev.append((prev["at"], prev["t"], f"{who(ip)}  {ORANGE}offline{R}  buffer {prev['b']}"))
+                    ev.append((now_t - 0.5, t, f"{who(ip)}  {GREEN}back{R}  after {mmss(gap)}, buffer {b if b == 'none' else mmss(float(b))}"))
+                if p != prev["p"]:
+                    ev.append((now_t, t, f"{who(ip)}  {'pause' if p == '1' else 'resume'}  at {mmss(float(pt))}"))
+            last[c] = {"at": now_t, "t": t, "p": p, "b": b if b == "none" else mmss(float(b))}
+        elif m := BARE.match(line):
+            d, t, ip, c = m.groups()
+            if c in last and last[c].get("p") != "stop":
+                ev.append((ts(d, t), t, f"{who(ip)}  stop"))
+                last[c]["p"] = "stop"
+    return [e[1:] for e in sorted((e for e in ev if e), key=lambda e: e[0])]
+
+
+def size():
+    """The pane's own size; a pipe gets a wide page instead."""
+    try:
+        return os.get_terminal_size(sys.stdout.fileno())
+    except OSError:
+        return os.terminal_size((160, 60))
+
+
+PLAIN = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+
+
+def say(text):
+    """Colour is for the screen: into a pipe the text goes plain."""
+    print(text if sys.stdout.isatty() else PLAIN.sub("", text))
+
+
+def down_reason(e):
+    """Why the droid's page did not answer, in words: the service is off, or the droid is away."""
+    refused = isinstance(getattr(e, "reason", e), ConnectionRefusedError)
+    if refused:
+        return f"the service is down on {HOST}  ·  radio up starts it"
+    return f"{HOST} does not answer ({type(getattr(e, 'reason', e)).__name__})  ·  is it on the tailnet?"
+
+
+def droid(*args, capture=False):
+    """Run radio-server.py on the droid over ssh."""
+    r = subprocess.run(["ssh", HOST, SERVER, *args], capture_output=capture, text=True)
+    return r
+
+
+def api(path):
+    return json.load(urllib.request.urlopen(f"http://{HOST}:8080{path}", timeout=6))
+
+
+def settle(want_up, wait=60):
+    """Wait for the page to answer (or stop answering), then say where the service stands."""
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        try:
+            st = api("/api/status")
+            live = sum(1 for x in st["stations"] if x["live"])
+            wanted = sum(1 for x in st["stations"] if x["enabled"]) if st["powered"] else 0
+            if want_up and live < wanted and time.time() - t0 < 25:
+                time.sleep(1)                # the relays take a few seconds to come up
+                continue
+            if want_up:
+                say(f"{GREEN}service up{R} on {HOST}  ·  pid {st['pid']}  ·  recording "
+                    f"{'on' if st['powered'] else 'off'}  ·  {live}/{len(st['stations'])} relays live")
+                return
+        except OSError as e:
+            if not want_up and isinstance(getattr(e, "reason", e), ConnectionRefusedError):
+                say(f"service down on {HOST}  ·  radio up starts it")
+                return
+        time.sleep(1)
+    say(f"{ORANGE}{HOST} did not settle in {wait} s  ·  radio status shows where it stands{R}")
+
+
+def ask(q):
+    if not sys.stdin.isatty():
+        sys.exit(q + " needs an answer: run it in a terminal")
+    return input(q + " [y/N] ").strip().lower() in ("y", "yes")
+
+
+def watch():
+    """Redraw every 2 s until q; the cursor hides while it runs."""
+    ip2name, fd = names(), sys.stdin.fileno()
+    old = termios.tcgetattr(fd) if sys.stdin.isatty() else None
+    sys.stdout.write("\033[?25l")
+    try:
+        if old:
+            tty.setcbreak(fd)
+        while True:
+            try:
+                lines = frame(ip2name)
+            except Exception as e:
+                lines = [f"{ORANGE}{down_reason(e)}{R}"]
+            sys.stdout.write("\033[H\033[2J" + "\n".join(lines) + "\n")
+            sys.stdout.flush()
+            if old and select.select([sys.stdin], [], [], 2)[0]:
+                if sys.stdin.read(1) in "qQ":
+                    break
+            elif not old:
+                time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if old:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\033[?25h")
+
+
+def log(follow):
+    ip2name, seen = names(), 0
+    while True:
+        st = api("/api/status")
+        col = {s["slug"]: s["colour"] for s in st["stations"]}
+        name = {s["slug"]: s["name"] for s in st["stations"]}
+        tail = subprocess.run(["ssh", HOST, f"tail -n 4000 {LOG}"], capture_output=True,
+                              text=True, timeout=8).stdout.splitlines()
+        ev = events(tail, ip2name, col, name)
+        for e in ev[seen:] if seen else ev[-40:]:
+            say(f"{GREY}{e[0]}{R}  {e[1]}")
+        seen = len(ev)
+        if not follow:
+            return
+        time.sleep(3)
+
+
+def deploy():
+    files = ["radio-page.html", "radio-server.py", "radio_core.py"]
+    sums = subprocess.run(["ssh", HOST, "cd .settings/Radio && md5sum " + " ".join(files)],
+                          capture_output=True, text=True).stdout
+    remote = {l.split()[1]: l.split()[0] for l in sums.splitlines() if len(l.split()) == 2}
+    import hashlib
+    changed = [f for f in files if hashlib.md5((HERE / f).read_bytes()).hexdigest() != remote.get(f)]
+    if not changed:
+        print("the droid already has these files")
+        return
+    subprocess.run(["scp", "-q", *[str(HERE / f) for f in changed], f"{HOST}:.settings/Radio/"], check=True)
+    print("copied: " + ", ".join(changed))
+    if any(f.endswith(".py") for f in changed):
+        if ask("the server changed: restart it now? the tapes empty"):
+            droid("restart")
+            settle(True)
+        else:
+            print("the new server runs from the next restart")
+    else:
+        print("the page is live: reload it on the phone")
+
+
+# The help, laid out and coloured like spark's: name, arguments in grey, what it does
+COMMANDS = [("mpv", "[args]", "Play in the terminal. What a bare radio runs; extra arguments go to mpv."),
+            ("status", "", "The droid: recording, each station's relay, tape and piece, who is listening."),
+            ("watch", "", "The same, live, with the event log underneath ([q] quits)."),
+            ("log", "[-f]", "The event log: taps, pauses, stops, offline and back, refills; -f follows it."),
+            ("on", "", "Recording on: every relay and its tape; starts the service first if it is down."),
+            ("off", "", "Recording off."),
+            ("start", "<station>...", "Record stations, by slug, number, or a word of the name."),
+            ("stop", "<station>...", "Mute stations, leaving the rest of the recording alone."),
+            ("up", "", "Start the service on the droid."),
+            ("down", "", "Stop the service on the droid."),
+            ("restart", "[-y]", "Down, then up; it asks first, because every tape empties."),
+            ("deploy", "", "Copy the page and the server to the droid; a server change asks to restart."),
+            ("logos", "", "Rebuild the dark logos on the droid."),
+            ("help", "", "This. Also --help and -h.")]
+
+
+def usage():
+    tty_ = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    def c(t, code): return f"\033[{code}m{t}\033[0m" if tty_ else t
+    print("\n" + c("radio", "1;35") + c(" — my stations, in the terminal and on AlfDROID", "2"))
+    print(c(f"The player is mpv; the service runs on {HOST}, reached over the tailnet.", "2"))
+    print("\n" + c("Usage", "1"))
+    print("  " + c("radio", "1;36") + c(" [command] [arguments]", "2"))
+    print("\n" + c("Commands", "1"))
+    width = max(len(n) for n, _, _ in COMMANDS) + 2
+    for name, slot, what in COMMANDS:
+        print(f"  {c(name.ljust(width), '1;36')}{c(slot + '  ', '2') if slot else ''}{what}")
+    print("\n" + c("$RADIO_HOST names the droid; it defaults to alfdroid.", "2") + "\n")
+
+
+def main(argv):
+    cmd, rest = (argv[0], argv[1:]) if argv else ("mpv", [])
+    if cmd == "mpv":
+        os.execvp("mpv", ["mpv", "--profile=radio", "--playlist=~~/radio.m3u", *rest])
+    elif cmd == "status":
+        try:
+            say("\n".join(frame(names(), with_events=False)))
+        except OSError as e:             # a stopped service is a state to report, not a failure
+            say(f"{ORANGE}{down_reason(e)}{R}")
+    elif cmd == "watch":
+        watch()
+    elif cmd == "log":
+        log("-f" in rest)
+    elif cmd in ("on", "off"):
+        try:
+            api("/api/status")
+        except OSError as e:
+            if cmd == "off" or not isinstance(getattr(e, "reason", e), ConnectionRefusedError):
+                raise
+            droid("up")                  # recording needs the service: bring it up first
+            settle(True)
+        r = urllib.request.urlopen(f"http://{HOST}:8080/api/power?on={1 if cmd == 'on' else 0}", timeout=10)
+        say(("recording " + f"{GREEN}on{R}") if json.load(r).get("powered") else "recording off")
+    elif cmd in ("start", "stop"):
+        if not rest:
+            sys.exit(f"radio {cmd} <station>...")
+        droid(cmd, *rest)
+        time.sleep(4 if cmd == "start" else 1)   # a starting relay needs a moment to go live
+        st = api("/api/status")
+        for x in st["stations"]:
+            if any(q == x["slug"] or q.lower() in x["name"].lower() or q == str(st["stations"].index(x) + 1)
+                   for q in rest):
+                state = "live" if x["live"] else "starting" if x["enabled"] else "muted"
+                say(f"{rgb(x['colour'], x['name'])}  {state}")
+    elif cmd in ("up", "down"):
+        droid(cmd)
+        settle(cmd == "up")
+    elif cmd == "restart":
+        if "-y" in rest or ask("restart the service on the droid? every tape empties"):
+            droid("restart")
+            settle(True)
+        else:
+            print("left running")
+    elif cmd == "deploy":
+        deploy()
+    elif cmd == "logos":
+        subprocess.run([str(HERE / "logos-dark"), HOST], check=True)
+    elif cmd in ("help", "-h", "--help"):
+        usage()
+    else:
+        usage()
+        sys.exit(f"radio: no command {cmd!r}")
+
+
+try:
+    main(sys.argv[1:])
+except KeyboardInterrupt:
+    print()
+except OSError as e:                     # any command that needs the droid's page
+    say(f"{ORANGE}{down_reason(e)}{R}")
+    sys.exit(1)
