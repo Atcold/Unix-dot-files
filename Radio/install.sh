@@ -70,6 +70,8 @@ if [ "$ROLE" = droid ] || [ "$ROLE" = all ]; then
   mkdir -p "$BINDIR"
   rm -f "$BINDIR/radio-server.py"
   ln -s "$here/radio-server.py" "$BINDIR/radio-server.py"
+  rm -f "$BINDIR/radio"
+  ln -s "$here/radio" "$BINDIR/radio"   # the same radio command as on the Macs, for the service here
   echo "Done. radio-server.py up starts icecast, the relays and the page on port 8080."
 
   if [ "$BOOT" = yes ]; then

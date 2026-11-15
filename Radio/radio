@@ -19,7 +19,8 @@ $RADIO_HOST names the droid (alfdroid).
 import json, os, re, select, subprocess, sys, termios, time, tty, urllib.request
 from pathlib import Path
 
-HOST = os.environ.get("RADIO_HOST", "alfdroid")
+LOCAL = "com.termux" in os.environ.get("PREFIX", "")   # running on the droid itself
+HOST = os.environ.get("RADIO_HOST", "localhost" if LOCAL else "alfdroid")
 HERE = Path(__file__).resolve().parent          # this folder: the page and the server live here
 SERVER = ".settings/Radio/radio-server.py"      # on the droid, from its home
 
@@ -55,7 +56,7 @@ def mmss(x):
 
 def frame(ip2name, with_events=True):
     st = json.load(urllib.request.urlopen(f"http://{HOST}:8080/api/status", timeout=4))
-    tail = subprocess.run(["ssh", HOST, f"tail -n 4000 {LOG}"], capture_output=True,
+    tail = subprocess.run(on_droid(f"tail -n 4000 {LOG}"), capture_output=True,
                           text=True, timeout=8).stdout.splitlines()
     now = time.time()
     col = {s["slug"]: s["colour"] for s in st["stations"]}
@@ -193,10 +194,14 @@ def down_reason(e):
     return f"{HOST} does not answer ({type(getattr(e, 'reason', e)).__name__})  ·  is it on the tailnet?"
 
 
+def on_droid(command):
+    """A shell command for the droid: over ssh from a Mac, directly on the droid itself."""
+    return ["sh", "-c", f"cd && {command}"] if LOCAL else ["ssh", HOST, command]
+
+
 def droid(*args, capture=False):
-    """Run radio-server.py on the droid over ssh."""
-    r = subprocess.run(["ssh", HOST, SERVER, *args], capture_output=capture, text=True)
-    return r
+    """Run radio-server.py on the droid."""
+    return subprocess.run(on_droid(" ".join([SERVER, *args])), capture_output=capture, text=True)
 
 
 def api(path):
@@ -266,7 +271,7 @@ def log(follow):
         st = api("/api/status")
         col = {s["slug"]: s["colour"] for s in st["stations"]}
         name = {s["slug"]: s["name"] for s in st["stations"]}
-        tail = subprocess.run(["ssh", HOST, f"tail -n 4000 {LOG}"], capture_output=True,
+        tail = subprocess.run(on_droid(f"tail -n 4000 {LOG}"), capture_output=True,
                               text=True, timeout=8).stdout.splitlines()
         ev = events(tail, ip2name, col, name)
         for e in ev[seen:] if seen else ev[-40:]:
@@ -333,6 +338,8 @@ def usage():
 
 def main(argv):
     cmd, rest = (argv[0], argv[1:]) if argv else ("mpv", [])
+    if LOCAL and cmd in ("mpv", "deploy", "logos"):
+        sys.exit(f"radio {cmd} runs on a Mac; on the droid: status, watch, log, on, off, start, stop, up, down, restart")
     if cmd == "mpv":
         os.execvp("mpv", ["mpv", "--profile=radio", "--playlist=~~/radio.m3u", *rest])
     elif cmd == "status":
