@@ -1173,7 +1173,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def handle_api(self, path, query):
         params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
         slug = params.get("slug")
-        if path == "/api/status":
+        if path == "/api/watch":
+            # What radio watch shows, at the phone's width, for the page's debug screen:
+            # the same code as the radio command, run here on the droid.
+            radio_cmd = str(Path(__file__).resolve().with_name("radio"))
+            env = {**os.environ, "RADIO_COLUMNS": params.get("cols", "52"), "NO_COLOR": "1"}
+            def run(*a):
+                try:
+                    return subprocess.run([sys.executable, radio_cmd, *a], capture_output=True,
+                                          text=True, timeout=20, env=env).stdout
+                except Exception as e:
+                    return f"{type(e).__name__}\n"
+            events = run("log").strip().splitlines()[::-1][:12]
+            body = run("status").rstrip() + "\n\nevents, newest first\n" + "\n".join(events) + "\n"
+            self.reply(200, body, "text/plain; charset=utf-8")
+        elif path == "/api/status":
             self.reply(200, json.dumps(self.radio.status(params.get("c"))), "application/json")
         elif path in ("/api/on", "/api/off") and slug:
             self.reply(200, json.dumps({"ok": self.radio.set(slug, path.endswith("on"))}),

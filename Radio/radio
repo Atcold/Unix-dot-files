@@ -81,13 +81,15 @@ def frame(ip2name, with_events=True):
             x.setdefault("began", ts(d, t))
     out = [f"\033[1mAlfDROID radio\033[0m  {GREY}pid {st['pid']} · recording "
            f"{'on' if st['powered'] else 'OFF'} · {time.strftime('%H:%M:%S')}{R}", ""]
-    room = size().columns - 42   # the piece takes the rest, one column short of the edge
-    out.append(f"{DIM}{'station':<22}{'relay':<11}{'tape':>6}  piece (live){R}")
+    cols = size().columns
+    nw, rw = (22, 11) if cols >= 80 else (14, 7)   # a phone's width gets narrower columns
+    room = cols - nw - rw - 6 - 3   # the piece takes the rest, one column short of the edge
+    out.append(f"{DIM}{'station':<{nw}}{'relay':<{rw}}{'tape':>6}  piece (live){R}")
     for s in st["stations"]:
         relay = ("live" if s["live"] else "off" if not st["powered"]
                  else "restarting" if s["enabled"] else "muted")
-        out.append(f"{rgb(s['colour'], f'{s['name'][:21]:<22}')}"
-                   f"{relay:<11}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
+        out.append(f"{rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
+                   f"{relay[:rw - 1]:<{rw}}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
     live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]
     newest = {}                              # one row per device: its latest client
@@ -171,7 +173,9 @@ def events(tail, ip2name, col, name):
 
 
 def size():
-    """The pane's own size; a pipe gets a wide page instead."""
+    """The pane's own size; a pipe gets a wide page, or $RADIO_COLUMNS when set."""
+    if os.environ.get("RADIO_COLUMNS"):
+        return os.terminal_size((int(os.environ["RADIO_COLUMNS"]), 60))
     try:
         return os.get_terminal_size(sys.stdout.fileno())
     except OSError:
@@ -283,7 +287,7 @@ def log(follow):
 
 
 def deploy():
-    files = ["radio-page.html", "radio-server.py", "radio_core.py"]
+    files = ["radio-page.html", "radio-server.py", "radio_core.py", "radio"]
     sums = subprocess.run(["ssh", HOST, "cd .settings/Radio && md5sum " + " ".join(files)],
                           capture_output=True, text=True).stdout
     remote = {l.split()[1]: l.split()[0] for l in sums.splitlines() if len(l.split()) == 2}

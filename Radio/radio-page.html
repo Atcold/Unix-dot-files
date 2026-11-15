@@ -64,6 +64,7 @@ max-width:640px;margin:0 auto;box-sizing:border-box}
 #bar-artist,#bar-title{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.3}
 #bar-artist{font-size:13px;font-weight:600;color:#eaeaea}
 #bar-title{font-size:12px;color:#9a9a9a}
+#watch{font-size:10px;color:#9a9a9a;white-space:pre;overflow-x:auto;margin:12px 0 0;line-height:1.45}
 #dbg{font-size:11px;color:#80b1d3;white-space:pre-wrap;margin:8px 0 0;line-height:1.6}
 #bar-pw.on{border-color:#b3de69;color:#b3de69}
 #acts button{flex:1 1 auto;font-size:12px;padding:11px 4px;border-radius:10px;white-space:nowrap}
@@ -74,13 +75,13 @@ max-height:62vh;overflow-y:auto;box-shadow:0 6px 24px rgba(0,0,0,.7)}
 .pdot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid #3a3a3a;background:transparent}
 #pick{flex:1;min-width:0;border-color:#3a3a3a;font-size:16px;padding:7px 14px 7px 8px;border-radius:22px;display:flex;align-items:center;gap:9px;line-height:0}
 #pick-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;line-height:1.3;text-align:left}
-</style></head><body><h2 class=pl>queue</h2><div id=played></div><div id=dbgbox><div id=tapewrap><div id=tscale></div><div id=tape><span id=tape-fill></span><span id=tape-tgt></span><span id=tape-head></span></div><div id=tlegend><span id=tl-heard>already heard</span><span id=tl-held>on the phone</span></div></div><pre id=dbg></pre></div><div id=mask onclick="menu(0)"></div><div id=menu>%%MENU%%</div><div id=player><header><h1 id=dbglink onclick="dbg()">AlfDROID radio %%ICON%%</h1><button id=rec onclick="pw()">○ REC</button><span id=svc></span></header><div id=bar-ctl><button id=pick onclick="menu(1)"><span id=pick-art></span><span id=pick-name>radio</span><span id=pick-caret>▾</span></button><button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button><button id=bar-stop onclick="stop()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button></div><div id=bar-piece><span id=bar-artist></span><span id=bar-title></span></div><div id=gauge-row><span id=gauge><span id=g-fill></span></span><span id=g-txt></span></div></div><footer>%%FOOT%%</footer><div id=acts><button id=bar-pw onclick="pw()">recording</button><button onclick="rst()">↺ reset</button><button onclick="location.reload()">⟳ reload</button><button onclick="dbg()">debug off</button></div><script>%%VARS%%</script>
+</style></head><body><h2 class=pl>queue</h2><div id=played></div><div id=dbgbox><div id=tapewrap><div id=tscale></div><div id=tape><span id=tape-fill></span><span id=tape-tgt></span><span id=tape-head></span></div><div id=tlegend><span id=tl-heard>already heard</span><span id=tl-held>on the phone</span></div></div><pre id=dbg></pre><pre id=watch></pre></div><div id=mask onclick="menu(0)"></div><div id=menu>%%MENU%%</div><div id=player><header><h1 id=dbglink onclick="dbg()">AlfDROID radio %%ICON%%</h1><button id=rec onclick="pw()">○ REC</button><span id=svc></span></header><div id=bar-ctl><button id=pick onclick="menu(1)"><span id=pick-art></span><span id=pick-name>radio</span><span id=pick-caret>▾</span></button><button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button><button id=bar-stop onclick="stop()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button></div><div id=bar-piece><span id=bar-artist></span><span id=bar-title></span></div><div id=gauge-row><span id=gauge><span id=g-fill></span></span><span id=g-txt></span></div></div><footer>%%FOOT%%</footer><div id=acts><button id=bar-pw onclick="pw()">recording</button><button onclick="rst()">↺ reset</button><button onclick="location.reload()">⟳ reload</button><button onclick="dbg()">debug off</button></div><script>%%VARS%%</script>
 <script>
 var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d30";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d31";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var DL=0,DLr=0,DLp=0,DLt=0,DLc=null,DLu=0;  // bytes downloaded since the tap, and the rate
 function dlrate(){var t=Date.now();if(!DLt){DLt=t;DLp=DL;return}
@@ -115,7 +116,7 @@ function behind(){                     // seconds the playhead sits behind the l
   return Math.max(0,(ME.end+(Date.now()-MET)*BPS/1000-head())/BPS)}
 function head(){return ME.anchor+snd.currentTime*BPS}   // the Ring byte the phone is playing
 var DBGP=false;try{DBGP=localStorage.getItem('radio-dbg')==='1'}catch(e){}
-function dbg(){DBGP=!DBGP;try{localStorage.setItem('radio-dbg',DBGP?'1':'0')}catch(e){}applydbg();setBar()}
+function dbg(){DBGP=!DBGP;try{localStorage.setItem('radio-dbg',DBGP?'1':'0')}catch(e){}applydbg();setBar();watch()}
 function applydbg(){rep('played').style.display=DBGP?'none':'block';
   rep('dbgbox').style.display=DBGP?'block':'none';document.querySelector('footer').style.display=DBGP?'block':'none';rep('acts').style.display=DBGP?'flex':'none';
   rep('dbglink').className=DBGP?'on':'';
@@ -156,7 +157,7 @@ function setBar(){
   var art=rep('pick-art'),src=now&&rep('row-'+now)&&rep('row-'+now).querySelector('img,.tile');
   if(art.dataset.slug!==(now||'')){art.dataset.slug=now||'';art.innerHTML='';if(src)art.appendChild(src.cloneNode(true))}
   var g=gauge(),gr=rep('gauge-row'),q=rep('svc');           // the top-right corner: service, or what is off
-  q.textContent=g&&g.m?g.m.replace(' · ','\n'):svcText;q.style.color=g&&g.m?'#fdb462':'';
+  q.textContent=g&&g.m?g.m.replace(' · ','\n'):'';   // only what needs attentionq.style.color=g&&g.m?'#fdb462':'';
   if(!g)gr.style.display='none';
   else{gr.style.display='flex';var tx=rep('g-txt');tx.textContent=g.t;tx.style.color=st.colour?'#'+st.colour:'';
     var fl=rep('g-fill');fl.style.width=(g.f!=null?Math.min(100,100*g.f/TGT):0)+'%';
@@ -309,6 +310,9 @@ function refresh(){
     setBar();
   }).catch(function(){svcText='service off';setBar()})}
 setInterval(refresh,3000);
+function watch(){if(!DBGP)return;                 // the debug screen shows what radio watch shows
+  fetch('/api/watch?cols=52').then(function(r){return r.ok?r.text():''}).then(function(t){rep('watch').textContent=t}).catch(function(){})}
+setInterval(watch,5000);
 setInterval(function(){                 // heartbeat: the button follows the real audio
   dlrate();
   if(!want||!snd){setBar();return}
