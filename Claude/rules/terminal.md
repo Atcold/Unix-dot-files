@@ -1,5 +1,7 @@
 # Terminal
 
+- One command per call: no chains with `&&`, `;` or `|| ` of separate actions, so each step is seen, approved and reported on its own. A pipe that feeds one command into another is fine.
+
 ## Terminal experiments
 
 - You teach me by experiment on my own machines: you run each step in my tmux pane, and I watch what you type and what comes out. On another machine, you open `ssh` in the pane and carry on there.
