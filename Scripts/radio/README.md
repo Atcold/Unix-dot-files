@@ -23,6 +23,8 @@ My stations, from one folder: `radio` plays them in the terminal on the Macs thr
 
 `python3 radio_core.py --selftest` checks the rules against titles the stations really send, and runs at the end of every install. Without python3 the Mac still plays: the script says so once and shows titles as they come.
 
+The droid re-encodes every station to 128 kbit/s MP3, so a station that sends more loses some of it. To hear whether it matters, play the station's own address from `radio.m3u` and the droid's live copy one after the other, on the same passage and with headphones. Rai sends 256 kbit/s, so it loses the most: `mpv http://icestreaming.rai.it/5.mp3` against `mpv http://alfdroid:8001/rai-radio-classica.mp3`. CNR Classical also changes format, from 194 kbit/s AAC to MP3: `mpv http://satellitepull.cnr.cn/live/wxdszs/playlist.m3u8` against `mpv http://alfdroid:8001/cnr-classical.mp3`.
+
 The droid itself, from a OnePlus 6 running Debian in Termux, is the `alfdroid` lesson in learning-with-claude.
 
 The source folder is `Scripts/radio/` in the settings repository. The command and mpv configuration link to this folder; the server’s boot entry uses the same location.
