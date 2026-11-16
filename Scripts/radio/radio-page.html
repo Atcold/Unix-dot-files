@@ -81,8 +81,10 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d34";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d36";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
+var PID=Math.random().toString(36).slice(2,10);   // this page's own id: the droid keeps one playhead per page
+var HD=null,HKEY='';                              // the piece heard at that playhead, and what the lock screen shows
 var DL=0,DLr=0,DLp=0,DLt=0,DLc=null,DLu=0;  // bytes downloaded since the tap, and the rate
 function dlrate(){var t=Date.now();if(!DLt){DLt=t;DLp=DL;return}
   var dt=(t-DLt)/1000;if(dt<1.5)return;
@@ -115,6 +117,15 @@ function behind(){                     // seconds the playhead sits behind the l
   if(!ME||!snd)return null;            // native: the droid's live edge against our playhead
   return Math.max(0,(ME.end+(Date.now()-MET)*BPS/1000-head())/BPS)}
 function head(){return ME.anchor+snd.currentTime*BPS}   // the Ring byte the phone is playing
+function walltime(){                     // where this page listens on the tape, in epoch seconds: the number the
+  if(!want||!now||!snd)return null;      // droid needs to name and log what the listener actually hears. A paused
+  var late=Date.now()-lastbeat>6000;     // or stalled player hears nothing, so it reports no place at all and the
+  if(snd.paused||late)return null;       // droid logs nothing from it
+  if(HLS){var d=snd.getStartDate?snd.getStartDate().getTime():NaN;   // Safari: the segment's own
+    return isNaN(d)?null:d/1000+snd.currentTime}                     // playlist stamp plus the playhead,
+  var b=behind();                        // so that answer rides the droid's clock. MSE and native: now, back
+  return b==null?null:Date.now()/1000-b} // by the lag the page measures, so the Mac's clock stands in
+function heard(){return (HD&&HD.title)||(now&&titles[now])||''}   // what to name: the tape's piece, the live one until it lands
 var DBGP=false;try{DBGP=localStorage.getItem('radio-dbg')==='1'}catch(e){}
 function dbg(){DBGP=!DBGP;try{localStorage.setItem('radio-dbg',DBGP?'1':'0')}catch(e){}applydbg();setBar();watch()}
 function applydbg(){rep('played').style.display=DBGP?'none':'block';
@@ -148,7 +159,7 @@ function gauge(){                      // the buffer's length, and a word only w
   return{t:snd&&(a||!m)?mmss(a):'–:––',f:a,w:a<60||!!m,m:m}}
 function setBar(){
   var st=st_of(now);
-  var pc=(now&&titles[now])||'',i=pc.indexOf(' - ');   // stations send 'artist - title'
+  var pc=heard(),i=pc.indexOf(' - ');   // stations send 'artist - title': the piece at the playhead, not the live one
   rep('bar-artist').textContent=i<0?pc:pc.slice(0,i);rep('bar-title').textContent=i<0?'':pc.slice(i+3);
   var playing=want&&snd&&!snd.paused&&Date.now()-lastbeat<6000;
   rep('bar-tgl').innerHTML=playing?ICONS.pause:ICONS.play;rep('bar-stop').disabled=!want;
@@ -180,8 +191,12 @@ function setBar(){
   else rep('tapewrap').style.display='none'}
   ST.forEach(function(s){var r=rep('row-'+s.slug);
     if(r){r.classList.toggle('playing',s.slug===now&&want);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
-  if(now&&titles[now]&&navigator.mediaSession)
-    navigator.mediaSession.metadata=new MediaMetadata({title:titles[now],album:st.name,artist:'AlfDROID radio'});
+  if(navigator.mediaSession&&now&&pc){          // the lock screen and Control Centre: the piece being heard,
+    var mkey=now+'\0'+pc+(HD&&HD.art?'#':'');   // and its cover as soon as the droid has the bytes for it
+    if(mkey!==HKEY){HKEY=mkey;var im=rep('row-'+now)&&rep('row-'+now).querySelector('img');
+      navigator.mediaSession.metadata=new MediaMetadata({title:i<0?pc:pc.slice(i+3),
+        artist:i<0?st.name:pc.slice(0,i),album:st.name,
+        artwork:[{src:(HD&&HD.art)?'/art/'+now+'/'+HD.id:(im?im.src:'/logo/'+now)}]});}}
   if(DBGP)rep('dbg').textContent=dbgtext();}
 function ahead(){if(!snd)return 0;
   if(sb||HLS){var b=snd.buffered,t=snd.currentTime;      // MSE and HLS: the real buffered range
@@ -199,7 +214,7 @@ function mk(keep){if(!now)return;            // keep: carry on from the spot the
   var at=keep&&snd&&!sb?(HLS?behind():ME?Math.round(head()):null):null;
   kill();stat='';if(!keep)retrySeq=0;lastbeat=Date.now();var st=st_of(now);
   if(native()){                                 // iOS Safari has no MSE: its native player streams it
-    CID=Math.random().toString(36).slice(2,10);ME=null;
+    CID=Math.random().toString(36).slice(2,10);ME=null;   // this play's stream id: the droid counts our bytes by it
     snd=new Audio();snd.preload='auto';
     HLS=!/native/.test(location.search)&&!!snd.canPlayType('application/vnd.apple.mpegurl');
     var room=RNG[now]!=null?RNG[now]-8:TGT;   // Safari ignores a start beyond the playlist and jumps
@@ -245,27 +260,32 @@ function resume(){stat='';if(sb){if(abort){try{abort.abort()}catch(e){}}pump()}e
 function playRow(slug,ev){if(ev)ev.stopPropagation();
   if(ev&&(ev.target.tagName==='BUTTON'||ev.target.tagName==='INPUT'))return;
   menu(0);                     // a row tap only ever turns that station on
-  now=slug;want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;
+  now=slug;want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;HD=null;HKEY='';
   fetch('/api/select?slug='+slug);setTimeout(refresh,400);
   mk();setBar();}
 function rst(){                // ↺: throw the late buffer away and re-anchor at 3 min behind live
-  if(!want||!now)return;mk();setBar();}
+  if(!want||!now)return;HD=null;HKEY='';mk();setBar();}
 function lastSlug(){           // queue head names the station you last had
   if(lastName)for(var i=0;i<ST.length;i++)if(ST[i].name===lastName)return ST[i].slug;
   return ST.length?ST[0].slug:null;}
 function tgl(){                // ▶ / ⏸: pause holds the spot, ▶ carries on from it
   if(!want){if(!now)now=lastSlug();
     if(!now){menu(1);return}
-    want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;fetch('/api/select?slug='+now);mk();setBar();return}
+    want=true;stat='';started=Date.now();DL=0;DLr=0;DLp=0;DLt=0;HD=null;HKEY='';
+    fetch('/api/select?slug='+now);mk();setBar();return}
   if(snd&&snd.paused){lastbeat=Date.now();snd.play().catch(function(){});setBar();return}
   if(snd&&Date.now()-lastbeat>6000){resume();return}   // stalled: poke the stream
   if(snd)snd.pause();setBar();}
 function stop(){               // ■: close the stream; the next ▶ starts fresh at −3
-  if(!want)return;want=false;kill();stat='';setBar();}
+  if(!want)return;want=false;kill();stat='';HD=null;HKEY='';setBar();}
 function pw(){fetch('/api/power?on='+(powered?0:1));setTimeout(refresh,400)}
 function refresh(){
-  fetch('/api/status'+(CID?'?c='+CID+(snd?'&t='+snd.currentTime.toFixed(1)+'&p='+(snd.paused?1:0)+  // the player's own state,
-    '&rs='+snd.readyState+'&b='+(snd.buffered.length?(snd.buffered.end(snd.buffered.length-1)-snd.currentTime).toFixed(1)+'r'+snd.buffered.length:'none')+'&ns='+snd.networkState+'&e='+(snd.error?snd.error.code:0)+'&m='+(snd.muted?1:0)+'&v='+snd.volume:''):'')).then(function(r){return r.json()}).then(function(s){
+  var w=walltime(),asked=w!=null?now:null;            // the station we are placing on the tape this poll
+  fetch('/api/status?c='+PID+(CID?'&s='+CID:'')+(snd?'&t='+snd.currentTime.toFixed(1)+'&p='+(snd.paused?1:0)+  // the player's own state,
+    '&rs='+snd.readyState+'&b='+(snd.buffered.length?(snd.buffered.end(snd.buffered.length-1)-snd.currentTime).toFixed(1)+'r'+snd.buffered.length:'none')+'&ns='+snd.networkState+'&e='+(snd.error?snd.error.code:0)+'&m='+(snd.muted?1:0)+'&v='+snd.volume:'')+
+    (asked?'&slug='+asked+'&at='+w.toFixed(1):'')     // where this page listens: the droid answers with the piece there
+    ).then(function(r){return r.json()}).then(function(s){
+    if(asked)HD=(asked===now&&s.heard)?s.heard:null;   // a page reporting nothing keeps the piece it last named
     powered=!!s.powered;var p=rep('bar-pw');
     p.textContent=powered?'recording on':'recording off';
     p.className=powered?'on':'';

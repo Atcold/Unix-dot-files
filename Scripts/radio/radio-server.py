@@ -28,11 +28,17 @@ stations and copy their mount URLs into a player such as Evermusic. State, iceca
 and logs live under ~/.local/share/radio/; station logos are fetched once into logos/
 there, and dropping your own logos/<slug>.png overrides the fetched one. Pieces land in
 log.tsv there, in the same shape radio.lua writes on the Macs: date, time, station, piece,
-once a piece has played 30 s with a listener connected.
+once a listener's playhead has had 30 s of it; a listener that comes through icecast
+directly (mpv on the Macs, a copied mount link) hears live, so its rows follow the live
+title. Each piece the tape holds also gets its cover from the iTunes Search API, taken only from a
+result whose artist matches the one the station names: the image is kept in RAM while the tape holds
+that piece and served at /art/<slug>/<id>, and the station's own logo stands in for a programme name
+and whenever Apple has nothing to match.
 """
 
 import base64
 import collections
+import hashlib
 import http.server
 import json
 import os
@@ -44,9 +50,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import unicodedata
 import uuid
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 try:
     import paho.mqtt.client as mqtt          # the Rai reader below; install.sh adds it on the droid
@@ -126,9 +133,39 @@ RAI_SCHEDULE = "https://www.raiplaysound.it/palinsesto/onAir.json"
 RAI_CHANNEL = "Rai Radio 3 Classica"
 IMG_MAGIC = [b"\x89PNG", b"GIF8", b"\xff\xd8", b"RIFF", b"BM", b"<svg", b"<?xml", b"\x00\x00\x01\x00"]
 
+# A piece's cover comes from Apple's iTunes Search API, which needs no key. Every piece the tape
+# holds is looked up once, the image stays in RAM while that piece is on the tape, and the station's
+# own logo stands in for a programme name and whenever Apple's answer fails the artist check.
+ART_LOOK = "https://itunes.apple.com/search"
+ART_GAP = 3.0        # seconds between lookups: Apple asks for no more than 20 a minute per address
+ART_BACKOFF = 60     # how long to leave Apple alone after its answers stop arriving
+ART_KEEP = 300       # seconds a cover outlives the title that asked for it: the tape's own length,
+                     # so an image is gone no later than the piece it belongs to
+
 
 def slugify(name):
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", name.lower())).strip("-")
+
+
+def art_id(slug, title):
+    """A short id for one title on one station, the same whenever that piece comes round again:
+    it names the cover's URL, so the page, Safari and the RAM cache all agree on one image."""
+    return hashlib.sha1(f"{slug}\0{title}".encode()).hexdigest()[:10]
+
+
+def art_ascii(name):
+    """An artist or piece as Apple likes to be asked: lowercase, accents folded so Dvořák reads
+    Dvorak, punctuation gone. Apple ranks the accented and the plain form differently, and the
+    plain one is what finds the artist the station names."""
+    s = unicodedata.normalize("NFD", (name or "").lower())
+    return re.sub(r"[^a-z0-9]+", " ", "".join(c for c in s if not unicodedata.combining(c))).strip()
+
+
+def art_words(name):
+    """The words worth comparing between the artist a station names and the one Apple answers
+    with: four letters or more and a letter among them, so a 'for' or a 'van' or the years Venice
+    puts after a composer's name never carry a match on their own."""
+    return {w for w in art_ascii(name).split() if len(w) >= 4 and any(c.isalpha() for c in w)}
 
 
 def load_stations():
@@ -460,6 +497,13 @@ class Radio:
         self.threads = {}        # slug -> relay thread
         self.rings = {}          # slug -> Ring, alive while its relay is
         self.titles = {}         # slug -> [title, since, loggable], from the icy readers and Rai
+        self.history = {}        # slug -> [{"t", "title", "log", "id"}], oldest first: the titles the
+                                 # tape can still reach, each stamped with its wall-clock start
+        self.playheads = {}      # (slug, page client id) -> {"at", "last", "watch"}: where a page says
+                                 # its listener is on the tape, sent with every status poll
+        self.covers = {}         # art id -> {"blob", "type", "seen"}: piece covers in RAM, nothing on disk
+        self.art_look = 0.0      # when the last iTunes lookup ran, to stay inside Apple's rate
+        self.art_wait = 0.0      # until when to leave Apple alone after its answers stopped
         self.meta = {st["slug"]: {"restarts": 0, "started": 0.0} for st in self.stations}
         self.icecast = None
         self.proxy_listeners = {}    # mount -> listeners on the page's buffered stream
@@ -748,13 +792,131 @@ class Radio:
                     pass
 
     def note_title(self, slug, title, loggable=True):
-        """Keep a station's current title. loggable False shows the title on the page
-        and status without ever logging it: Rai's programme name stands in while no
-        piece caption is current, and a programme is not something I listened to."""
+        """Keep a station's current title, and the run of titles behind it: every change starts
+        a new entry stamped with the wall clock it began on, and the history keeps the ones the
+        tape can still reach, so a poll naming a time three minutes back finds the piece the
+        tape was carrying then. loggable False shows the title on the page and status without
+        ever logging it: Rai's programme name stands in while no piece caption is current, and
+        a programme is not something I listened to."""
         with self.lock:
             cur = self.titles.get(slug)
             if not cur or cur[0] != title:
-                self.titles[slug] = [title, time.time(), loggable]
+                now = time.time()
+                self.titles[slug] = [title, now, loggable]
+                self.history.setdefault(slug, []).append(
+                    {"t": now, "title": title, "log": loggable, "id": art_id(slug, title)})
+                self.drop_old_titles(slug)
+
+    def drop_old_titles(self, slug):
+        """Drop the oldest title once the one after it starts inside the tape's oldest second,
+        so the history covers exactly what a listener's playhead can still reach and nothing
+        older. The caller holds the lock."""
+        h = self.history.get(slug)
+        if not h:
+            return
+        oldest = time.time() - RING_MAX / AUDIO_BPS
+        while len(h) > 1 and h[1]["t"] <= oldest:
+            h.pop(0)
+
+    def piece_at(self, slug, at):
+        """The title the tape was carrying at the wall-clock instant at, or None when the
+        history does not reach that far back."""
+        with self.lock:
+            h = list(self.history.get(slug) or ())
+        for x in reversed(h):
+            if x["t"] <= at:
+                return x
+        return None
+
+    def report(self, slug, client, at):
+        """Where a page says its playhead sits on the tape, in the wall clock the tape carries:
+        the phone reads it from the HLS playlist's own timestamps, the desktop from its lag.
+        log_loop logs from these, so a row is something a listener actually heard. The client id
+        is part of the record: without it two pages would fold into one listener."""
+        if slug not in self.meta or not client or at is None:
+            return
+        now = time.time()
+        if not now - 3600 <= at <= now + 120:   # a page whose clock wandered is not believed
+            return
+        with self.lock:
+            p = self.playheads.get((slug, client))
+            if p is None:
+                p = self.playheads[(slug, client)] = {"at": at, "last": now, "watch": None}
+            p["at"], p["last"] = at, now
+
+    def art_loop(self):
+        """Fill in the covers the tape's titles ask for, one at a time at Apple's pace, and let go
+        of the ones whose piece has left the tape. Nothing here touches disk: a restart starts from
+        empty covers, exactly as the tapes do."""
+        while True:
+            time.sleep(1)
+            self.drop_old_covers()
+            if time.time() < self.art_wait:
+                continue
+            x = self.art_todo()
+            if x is None or time.time() - self.art_look < ART_GAP:
+                continue
+            self.art_look = time.time()
+            if self.fetch_cover(x) == "down":
+                self.art_wait = time.time() + ART_BACKOFF
+
+    def art_todo(self):
+        """The oldest piece on any tape with no cover record yet, or None. A record whose blob is
+        None is a finished answer: Apple had nothing for that piece, so it is never asked again. A
+        title that is not a piece (log False, Rai's programme name) has no cover to look for."""
+        with self.lock:
+            for h in self.history.values():
+                for x in h:
+                    if x["log"] and x["id"] not in self.covers:
+                        return x
+        return None
+
+    def fetch_cover(self, x):
+        """One piece's cover: Apple's search on the 'artist - title' the station sends, the first
+        artwork offered by an artist whose name shares a real word with the one the station names.
+        "down" means Apple never answered, so the next pass tries again; an answer with nothing
+        matchable in it is recorded as a miss and stands, which leaves the station's logo showing."""
+        artist, _, rest = x["title"].partition(" - ")
+        want = art_words(artist)
+        term = quote(art_ascii(artist + " " + (rest or x["title"])))
+        rec = {"blob": None, "type": "", "seen": time.time()}
+        try:
+            found = json.loads(fetch(f"{ART_LOOK}?media=music&entity=song&limit=5&term={term}",
+                                     timeout=10).decode("utf-8", "replace"))
+        except Exception:
+            return "down"
+        for r in found.get("results", []):
+            if not want & art_words(r.get("artistName")):
+                continue                     # someone else's recording of something else
+            url = (r.get("artworkUrl100") or "").replace("100x100bb", "600x600bb")
+            if not url.startswith("https://"):
+                continue
+            try:
+                blob = fetch(url, timeout=15)
+            except Exception:
+                continue
+            if blob[:2] == b"\xff\xd8":
+                rec = {"blob": blob, "type": "image/jpeg", "seen": time.time()}
+                break
+            if blob[:4] == b"\x89PNG":
+                rec = {"blob": blob, "type": "image/png", "seen": time.time()}
+                break
+        with self.lock:
+            self.covers[x["id"]] = rec
+        return "ok"
+
+    def drop_old_covers(self):
+        """A cover is RAM, not a file: a title still on any tape keeps its image, and one nobody
+        has asked for since ART_KEEP seconds ago is freed, so the cache holds minutes of covers."""
+        now = time.time()
+        with self.lock:
+            for h in self.history.values():
+                for x in h:
+                    c = self.covers.get(x["id"])
+                    if c:
+                        c["seen"] = now
+            for k in [k for k, c in self.covers.items() if now - c["seen"] > ART_KEEP]:
+                del self.covers[k]
 
     def log_line(self, station, title):
         """Append one row, same columns as radio.lua: date, time, station, piece.
@@ -770,34 +932,77 @@ class Radio:
         del self.recent[12:]
 
     def log_loop(self):
-        """Mirror radio.lua's rule: a piece is logged once it held the mount for 30 s
-        while a listener was connected, so skipping through stations logs nothing. A
-        listener counts whether it came through icecast directly or through this page's
-        buffered proxy. A station announces the same piece several times, so the last
-        row per station is kept and a piece that comes back is not written twice."""
-        watching = {}  # slug -> [title, since, logged], the piece being watched
+        """Mirror radio.lua's 30 s rule on the listener's own timeline. A page says with every
+        status poll where its playhead sits on the tape, so a piece is logged once one listener
+        has had 30 s of it at that playhead and has been listening for 30 s: what aired before
+        the tap but came out of the tape gets its row, and what aired while nobody was there
+        does not. A listener that comes through icecast directly (mpv on the Macs, a mount link
+        copied into a plain player) hears live, so its rows keep coming from the live title. A
+        station announces the same piece several times, so the last row per station is kept and
+        a piece that comes back is not written twice."""
+        watching = {}  # slug -> [title, since, logged], the live piece being watched
         logged = {}    # slug -> the last title written, so one piece is one row
         while True:
             stats = self.stats()
+            now = time.time()
+            with self.lock:
+                for k in [k for k, p in self.playheads.items() if now - p["last"] > 90]:
+                    del self.playheads[k]        # the page stopped polling: nobody hears from it
+                for slug in list(self.history):
+                    self.drop_old_titles(slug)   # titles the tape can no longer reach go too
+                playheads = [(s, p) for (s, _), p in self.playheads.items()]
+                direct = {st["slug"]: max(0, stats.get(self.mount(st), {}).get("listeners", 0)
+                                          - self.proxy_listeners.get(self.mount(st), 0))
+                          for st in self.stations}   # icecast's own: the page's are lagged listeners
             for st in self.stations:
-                slug = st["slug"]
                 try:
-                    entry = self.titles.get(slug, ["", 0, True])
-                    title, loggable = entry[0], entry[2]
-                    listening = stats.get(self.mount(st), {}).get("listeners", 0) > 0
-                    cur = watching.get(slug)
-                    if not title or not loggable or not listening or not cur or cur[0] != title:
-                        watching[slug] = ([title, time.time(), False]
-                                          if title and loggable and listening else None)
-                        continue
-                    if not cur[2] and time.time() - cur[1] >= 30:
-                        cur[2] = True
-                        if logged.get(slug) != title:
-                            logged[slug] = title
-                            self.log_line(st["name"], title)
+                    mine = [p for s, p in playheads if s == st["slug"]]
+                    if mine:
+                        self.log_heard(st, mine, logged)
+                    self.log_live(st, direct.get(st["slug"], 0), watching, logged)
                 except Exception:
                     continue
             time.sleep(5)
+
+    def log_heard(self, st, playheads, logged):
+        """radio.lua's rule told from the tape: the listener's own playhead has to sit 30 s
+        inside the piece, and the page has to have been reporting that piece for 30 s, so a
+        piece tapped into mid-way still needs half a minute of listening and one that was only
+        ever aired, never reached, gets no row. A page silent for three polls (it polls every
+        3 s) is paused or gone: its watch is dropped, so a playhead that starts speaking again
+        has to hold a piece for a fresh 30 s before anything is written."""
+        slug, now = st["slug"], time.time()
+        for p in playheads:
+            if now - p["last"] > 10:               # silent: a frozen playhead hears nothing
+                p["watch"] = None
+                continue
+            x = self.piece_at(slug, p["at"])
+            title = x["title"] if x and x["log"] else ""
+            cur = p["watch"]
+            if not title or not cur or cur[0] != title:
+                p["watch"] = [title, now, False] if title else None
+                continue
+            if not cur[2] and p["at"] - x["t"] >= 30 and now - cur[1] >= 30:
+                cur[2] = True
+                if logged.get(slug) != title:
+                    logged[slug] = title
+                    self.log_line(st["name"], title)
+
+    def log_live(self, st, listening, watching, logged):
+        """The rule for listeners that hear the mount as it airs: the live title has to hold the
+        mount for 30 s while one of them is connected."""
+        slug, now = st["slug"], time.time()
+        entry = self.titles.get(slug, ["", 0, True])
+        title, loggable = entry[0], entry[2]
+        cur = watching.get(slug)
+        if not title or not loggable or not listening or not cur or cur[0] != title:
+            watching[slug] = ([title, now, False] if title and loggable and listening else None)
+            return
+        if not cur[2] and now - cur[1] >= 30:
+            cur[2] = True
+            if logged.get(slug) != title:
+                logged[slug] = title
+                self.log_line(st["name"], title)
 
     def supervisor(self):
         while True:
@@ -836,7 +1041,12 @@ class Radio:
             out.setdefault(mount, {"listeners": 0, "bitrate": ""})["listeners"] += n
         return out
 
-    def status(self, client=None):
+    def status(self, client=None, want_slug=None, at=None, stream=None):
+        """Each row keeps the station's live title, which is what radio status shows; when a page
+        also names where its own playhead sits (want_slug, at), the answer adds the piece the tape
+        was carrying at that instant, the one the listener is actually hearing. The page's own id
+        keys that record; stream is the id its current stream carries, which is how its buffer is
+        drawn."""
         stats = self.stats()
         rows = []
         for st in self.stations:
@@ -857,10 +1067,20 @@ class Radio:
                          "title": self.titles.get(slug, [""])[0],
                          "bitrate": info.get("bitrate", ""), "listeners": info.get("listeners", 0),
                          "ring": round(ring.seconds()) if ring else 0,
-                         "me": ring.client_view(client) if ring and client else None,
+                         "me": ring.client_view(stream or client) if ring else None,
                          "error": error})
+        heard = None
+        if want_slug and at is not None:
+            x = self.piece_at(want_slug, at)
+            if x:
+                heard = {"title": x["title"], "id": x["id"]}
+                c = self.covers.get(x["id"])
+                if c:
+                    c["seen"] = time.time()     # a listener has this cover up: keep it a while longer
+                    if c["blob"]:
+                        heard["art"] = 1        # the bytes are here, so the page can show them
         return {"pid": os.getpid(), "enc": self.ext.lstrip("."), "powered": self.powered,
-                "recent": self.recent, "stations": rows}
+                "recent": self.recent, "heard": heard, "stations": rows}
 
     def shutdown(self):
         with self.lock:
@@ -931,11 +1151,13 @@ def page(radio, host):
 class Handler(http.server.BaseHTTPRequestHandler):
     radio = None
 
-    def reply(self, code, body, ctype):
+    def reply(self, code, body, ctype, extra=()):
         data = body.encode() if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        for k, v in extra:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
 
@@ -1114,6 +1336,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def art(self, rest):
+        """A piece's cover out of RAM, at /art/<slug>/<id>. A title Apple answered with an image
+        gets those bytes; a title Apple had nothing for redirects to the station's own logo, so the
+        one URL a player is handed always has something to show; a title whose lookup is still out
+        there gets a 404 with no cache, so the page asks again."""
+        slug, _, aid = rest.partition("/")
+        rec = self.radio.covers.get(aid) if re.fullmatch(r"[0-9a-f]{10}", aid or "") else None
+        if rec is None or slug not in self.radio.meta:
+            self.reply(404, "no cover yet\n", "text/plain", [("Cache-Control", "no-store")])
+            return
+        rec["seen"] = time.time()          # a player is fetching it: keep it a while longer
+        if rec["blob"] is None:            # Apple had nothing for this piece: the station's own art
+            self.reply(302, b"", "text/plain",
+                       [("Location", "/logo/" + slug), ("Cache-Control", "no-store")])
+            return
+        self.reply(200, rec["blob"], rec["type"], [("Cache-Control", "public, max-age=86400")])
+
     def do_GET(self):
         path, _, query = self.path.partition("?")
         params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
@@ -1155,6 +1394,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, blob, ctype)
             else:
                 self.reply(404, "not found", "text/plain")
+        elif path.startswith("/art/"):
+            self.art(path[len("/art/"):])
         elif path == "/radio.m3u":
             # A fresh playlist for Evermusic's online-links feature: whatever is
             # switched on here is what the player gets, in the page's order.
@@ -1188,7 +1429,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = run("status").rstrip() + "\n\nevents, newest first\n" + "\n".join(events) + "\n"
             self.reply(200, body, "text/plain; charset=utf-8")
         elif path == "/api/status":
-            self.reply(200, json.dumps(self.radio.status(params.get("c"))), "application/json")
+            try:                        # the page names where its own playhead sits, in epoch seconds
+                at = float(params["at"]) if params.get("at") else None
+            except ValueError:
+                at = None
+            self.radio.report(slug, params.get("c"), at)
+            # c is the page, s the stream it opened just now: the playhead outlives a reconnect,
+            # the byte counts do not
+            self.reply(200, json.dumps(self.radio.status(params.get("c"), slug, at, params.get("s"))),
+                       "application/json")
         elif path in ("/api/on", "/api/off") and slug:
             self.reply(200, json.dumps({"ok": self.radio.set(slug, path.endswith("on"))}),
                        "application/json")
@@ -1260,6 +1509,7 @@ def serve():
     threading.Thread(target=radio.auto_off, daemon=True).start()
     threading.Thread(target=radio.rai_loop, daemon=True).start()
     threading.Thread(target=fetch_logos, daemon=True).start()
+    threading.Thread(target=radio.art_loop, daemon=True).start()
     Handler.radio = radio
     http.server.ThreadingHTTPServer(("0.0.0.0", WEB_PORT), Handler).serve_forever()
 
