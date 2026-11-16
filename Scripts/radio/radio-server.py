@@ -89,6 +89,9 @@ PAGE = Path(__file__).with_name("radio-page.html")
 
 ICECAST_PORT = 8001
 WEB_PORT = 8080
+# Requests from the internet arrive through Tailscale Funnel, which marks them with its
+# own headers; they need this key, once in the address (?k=) and then as a cookie.
+KEY_FILE = STATE / "key"
 UA = radio_core.UA
 
 AUDIO_BPS = 16000   # bytes per second of a 128 kbit/s MP3 (128000 / 8): how far a lag reaches into a Ring
@@ -1106,7 +1109,7 @@ def page(radio, host):
     menu_rows, station_list = [], []
     for st in radio.stations:
         slug, colour, mount = st["slug"], st["colour"], radio.mount(st)
-        url = f"http://{host}:{WEB_PORT}{mount}"
+        url = mount                 # same origin, on the tailnet or through Funnel
         station_list.append({"slug": slug, "name": st["name"], "url": url, "colour": colour})
         logo = LOGOS / (slug + ".img")
         if logo.exists():
@@ -1168,7 +1171,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.radio.mount(st)
         return None
 
+    def public_key(self):
+        """The key for Funnel requests, made on first use and kept with the server's state."""
+        if not KEY_FILE.exists():
+            KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            KEY_FILE.write_text(secrets.token_urlsafe(18) + "\n")
+            KEY_FILE.chmod(0o600)
+        return KEY_FILE.read_text().strip()
+
+    def allowed(self):
+        """Tailnet and local requests pass; a Funnel request needs the key. A request
+        that brings the key in its address gets it back as a cookie, and the page itself
+        is sent on to its clean address."""
+        if not (self.headers.get("Tailscale-Funnel-Request") or self.headers.get("X-Forwarded-For")):
+            return True
+        key = self.public_key()
+        path, _, query = self.path.partition("?")
+        given = dict(p.split("=", 1) for p in query.split("&") if "=" in p).get("k")
+        cookies = dict(c.strip().split("=", 1) for c in self.headers.get("Cookie", "").split(";") if "=" in c)
+        if given and secrets.compare_digest(given.encode(), key.encode()):
+            if path == "/":
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.send_header("Set-Cookie", f"rk={key}; Path=/; Max-Age=31536000; Secure; HttpOnly; SameSite=Lax")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return False
+            return True
+        if secrets.compare_digest(cookies.get("rk", "").encode(), key.encode()):
+            return True
+        self.reply(404, "not found", "text/plain")
+        return False
+
     def do_HEAD(self):
+        if not self.allowed():
+            return
         mount = self.mount_routes(self.path.partition("?")[0])
         if mount:
             # icecast 2.5 answers HEAD with 405, which trips file-style probes in
@@ -1354,6 +1391,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.reply(200, rec["blob"], rec["type"], [("Cache-Control", "public, max-age=86400")])
 
     def do_GET(self):
+        if not self.allowed():
+            return
         path, _, query = self.path.partition("?")
         params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
         if path.endswith(".m3u8") or path.startswith("/hls/"):
@@ -1459,6 +1498,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(404, "not found", "text/plain")
 
     def do_POST(self):
+        if not self.allowed():
+            return
         path, _, query = self.path.partition("?")
         self.handle_api(path, query)
 
