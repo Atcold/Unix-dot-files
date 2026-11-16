@@ -656,6 +656,16 @@ class Radio:
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=log,
                                         stdin=subprocess.DEVNULL)
                 self.procs[slug] = proc
+            last = [time.time()]
+            def watchdog(proc=proc, last=last):
+                # An HLS station whose segments keep failing leaves ffmpeg alive and silent;
+                # 30 s without a byte ends it, and the loop below starts a fresh one.
+                while proc.poll() is None:
+                    time.sleep(5)
+                    if time.time() - last[0] > 30:
+                        proc.kill()
+                        return
+            threading.Thread(target=watchdog, daemon=True).start()
             while True:                     # stdout carries the relay's own bytes
                 try:                        # a raw read: bytes flow at once, not in 64 kB lots
                     data = os.read(proc.stdout.fileno(), 65536)
@@ -663,6 +673,7 @@ class Radio:
                     break
                 if not data:
                     break
+                last[0] = time.time()
                 ring.append(data)
             rc = proc.wait()
             with self.lock:
