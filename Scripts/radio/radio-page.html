@@ -82,7 +82,7 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d42";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d43";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var PID=Math.random().toString(36).slice(2,10);   // this page's own id: the droid keeps one playhead per page
 var HD=null,HKEY='';                              // the piece heard at that playhead, and what the lock screen shows
@@ -194,10 +194,10 @@ function setBar(){
     if(r){r.classList.toggle('playing',s.slug===now&&want);if(s.slug===now)r.style.borderLeftColor='#'+s.colour}});
   if(navigator.mediaSession&&now&&pc){          // the lock screen and Control Centre: the piece being heard,
     var mkey=now+'\0'+pc+(HD&&HD.art?'#':'');   // and its cover as soon as the droid has the bytes for it
-    if(mkey!==HKEY){HKEY=mkey;var im=rep('row-'+now)&&rep('row-'+now).querySelector('img');
+    if(mkey!==HKEY){HKEY=mkey;
       navigator.mediaSession.metadata=new MediaMetadata({title:i<0?pc:pc.slice(i+3),
         artist:i<0?st.name:pc.slice(0,i),album:st.name,
-        artwork:[{src:(HD&&HD.art)?'/art/'+now+'/'+HD.id:(im?im.src:'/logo/'+now)}]});}}
+        artwork:[{src:(HD&&HD.art)?'/art/'+now+'/'+HD.id:'/logo/'+now+'-art',sizes:'600x600'}]});}}
   if(DBGP)rep('dbg').textContent=dbgtext();}
 function ahead(){if(!snd)return 0;
   if(sb||HLS){var b=snd.buffered,t=snd.currentTime;      // MSE and HLS: the real buffered range

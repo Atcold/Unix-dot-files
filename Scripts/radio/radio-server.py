@@ -1384,9 +1384,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(404, "no cover yet\n", "text/plain", [("Cache-Control", "no-store")])
             return
         rec["seen"] = time.time()          # a player is fetching it: keep it a while longer
-        if rec["blob"] is None:            # Apple had nothing for this piece: the station's own art
+        if rec["blob"] is None:            # Apple had nothing for this piece: the station's square tile
             self.reply(302, b"", "text/plain",
-                       [("Location", "/logo/" + slug), ("Cache-Control", "no-store")])
+                       [("Location", "/logo/" + slug + "-art"), ("Cache-Control", "no-store")])
             return
         self.reply(200, rec["blob"], rec["type"], [("Cache-Control", "public, max-age=86400")])
 
@@ -1422,8 +1422,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif path.startswith("/logo/"):
-            logo = LOGOS / (path[len("/logo/"):] + ".img")
-            if logo.is_file() and "/" not in path[len("/logo/"):]:
+            name = path[len("/logo/"):]
+            logo = LOGOS / (name + ".img")
+            if name.endswith("-art") and not logo.is_file():   # no square tile drawn yet: the logo
+                logo = LOGOS / (name[:-len("-art")] + ".img")
+            if logo.is_file() and "/" not in name:
                 blob = logo.read_bytes()
                 if blob.startswith(b"<?xm") or b"<svg" in blob[:300]:
                     ctype = "image/svg+xml"

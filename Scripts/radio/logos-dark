@@ -6,9 +6,11 @@ the droid's logos folder as <slug>-dark.img, which the page asks for by name.
     ./logos-dark [host]        # host defaults to alfdroid
 """
 import io
+import json
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -78,14 +80,54 @@ def rai_letters(svg):
     return s.encode()
 
 
+def raster(blob, width=480):
+    """A logo as a Pillow image: SVGs go through rsvg-convert at the given width."""
+    if blob.lstrip().startswith(b"<"):
+        blob = subprocess.run(["rsvg-convert", "-w", str(width)], input=blob,
+                              capture_output=True, check=True).stdout
+    return Image.open(io.BytesIO(blob)).convert("RGBA")
+
+
+def tile(im, ink):
+    """The cover a piece gets when Apple has none: a 600 px square on the page's dark
+    ground with the logo centred inside 420 px, so a wide wordmark stays a logo on the
+    lock screen. Dark-ink logos are inverted to light with their hues kept, as the page's
+    invert(1) hue-rotate(180deg) does on its tiles."""
+    if ink:
+        a = im.getchannel("A")
+        h, s, v = Image.eval(im.convert("RGB"), lambda c: 255 - c).convert("HSV").split()
+        h = Image.eval(h, lambda x: (x + 128) % 256)
+        im = Image.merge("HSV", (h, s, v)).convert("RGB").convert("RGBA")
+        im.putalpha(a)
+    im.thumbnail((420, 420), Image.LANCZOS)
+    out = Image.new("RGB", (600, 600), DARK)
+    out.paste(im, ((600 - im.width) // 2, (600 - im.height) // 2), im)
+    return out
+
+
 RASTER = {"radio-swiss-classic": flat_ground, "radio-swiss-jazz": flat_ground,
           "jazz24": gradient_ground, "secret-agent": red_poster}
+# Logos drawn in dark ink, which the page inverts; Rai's dark version is already light
+INK = {"wqxr", "classic-fm"}
+SLUGS = [x["slug"] for x in json.load(urllib.request.urlopen(f"http://{HOST}:8080/api/status", timeout=15))["stations"]]
 
 with tempfile.TemporaryDirectory() as tmp:
+    dark = {}
     for slug, draw in RASTER.items():
+        if slug not in SLUGS:
+            continue
         dest = Path(tmp) / f"{slug}-dark.img"
         draw(Image.open(io.BytesIO(fetch(slug)))).save(dest, "PNG")
-    (Path(tmp) / "rai-radio-classica-dark.img").write_bytes(rai_letters(fetch("rai-radio-classica")))
+        dark[slug] = dest.read_bytes()
+    rai = rai_letters(fetch("rai-radio-classica"))
+    (Path(tmp) / "rai-radio-classica-dark.img").write_bytes(rai)
+    dark["rai-radio-classica"] = rai
+    for slug in SLUGS:
+        try:
+            src = dark.get(slug) or fetch(slug)
+        except urllib.error.HTTPError:     # no logo on the droid yet: the page shows initials
+            continue
+        tile(raster(src), slug in INK).save(Path(tmp) / f"{slug}-art.img", "PNG")
     files = sorted(str(p) for p in Path(tmp).iterdir())
     subprocess.run(["scp", "-q", *files, f"{HOST}:.local/share/radio/logos/"], check=True)
     print("\n".join(Path(f).name for f in files))
