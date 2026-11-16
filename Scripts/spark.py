@@ -14,7 +14,7 @@ works outside the LAN too. The machine itself is reached over the tailnet.
   spark off             clean shutdown over ssh, then plug off
   spark restart         off, then on --wait
   spark models          the model store on the Spark: number, org/name, size, what is served
-  spark model <n|id>    what the Hub records for one of them: quantization, parameters, base model, licence
+  spark model <n|id>    what the Hub records for one of them: quantization, parameters, base model, licence; a running server adds its side
   spark serving         what runs on the Spark: state, uptime, image, forwarded port
   spark speed           tokens per second from a live probe: first token, prompt processing, generation   [<model> [server]]
   spark serve           serve a model: start it, open its tunnel, wait for its API   [<model> [server] | tunnel]
@@ -987,6 +987,31 @@ def served_models(cfg):
     return served
 
 
+def served_api(cfg, model):
+    """What a running server says about a model at its /v1/models, as
+    (server, endpoint, entry) per [models] triple that answers with this id. The local
+    tunnel is asked first; when nothing listens there, the same curl runs on the Spark
+    over ssh, so a serving container reads with or without an open tunnel."""
+    out = []
+    for srv, local, remote in model_rows(cfg, model) or []:
+        r = subprocess.run(["curl", "-s", "--max-time", "2",
+                            f"http://127.0.0.1:{local}/v1/models"],
+                           capture_output=True, text=True)
+        where = f"127.0.0.1:{local}"
+        if r.returncode != 0 or not r.stdout.strip():
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", cfg["host"],
+                                f"curl -s --max-time 3 http://127.0.0.1:{remote}/v1/models"],
+                               capture_output=True, text=True)
+            where = f"{cfg['host']}:{remote}"
+        try:
+            entries = json.loads(r.stdout).get("data") or []
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        out += [(srv, where, e) for e in entries
+                if model in (e.get("id"), e.get("root"))]
+    return out
+
+
 def cache_rows(cfg):
     """The model store on the Spark as rows from `hf cache ls`, heaviest first: the one
     listing behind `spark models` and behind the numbers `spark model <n>` reads, so the
@@ -1106,7 +1131,8 @@ def quant_facts(info):
 def model_info(cfg, arg):
     """`spark model <n | org/name>`: what the Hub records about one model — quantization,
     parameter count, the model it was made from, licence, popularity. A number is the row
-    `spark models` printed, so both commands read the same listing."""
+    `spark models` printed, so both commands read the same listing. When the model is in
+    [models] and its server answers /v1/models, the server's own line closes the card."""
     if not arg:
         err(f"which model? {cyan('spark models')} numbers them, then {cyan('spark model')} <n>")
     row, rid = None, arg
@@ -1168,6 +1194,14 @@ def model_info(cfg, arg):
     fact("Hub", " · ".join(hub))
     if row:
         fact("Spark", f"{accent(row['size'])} cached  {dim('·  last access ' + row['last_accessed'])}")
+    for srv, where, entry in served_api(cfg, rid):
+        tail = []
+        if entry.get("max_model_len"):
+            tail.append(f"{people(entry['max_model_len'])} context")
+        if entry.get("owned_by"):
+            tail.append(entry["owned_by"])
+        fact("served", accent(srv) + " on " + bold(where)
+             + (dim("  ·  " + "  ·  ".join(tail)) if tail else ""))
     print()
 
 
@@ -1285,7 +1319,8 @@ COMMANDS = {
     "restart": ("off, then on --wait.", []),
     "models": ("The model store on the Spark: number, org/name, size, last access, and what is served.", []),
     "model": ("What the Hub records for one model: quantization, parameter count, the base "
-              "model it was made from, licence, popularity. The number is spark models' row.", []),
+              "model it was made from, licence, popularity. The number is spark models' row. "
+              "A running server adds its side: endpoint, context window, backend.", []),
     "serving": ("What runs on the Spark: state, uptime, image, forwarded port.", []),
     "speed": ("Tokens per second from a live probe: first token, prompt processing, "
               "generation, and what the service has served in total.", []),
