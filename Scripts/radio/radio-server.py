@@ -100,8 +100,9 @@ RING_MAX = AUDIO_BPS * 300   # five minutes of tape beyond the page's 180 s buff
 IDLE_OFF = int(os.getenv("RADIO_IDLE_OFF", "900"))   # a recording with no listener for this
                              # many seconds sleeps itself; 0 (or negative) keeps it awake
 
-# ColorBrewer Set3 in the order radio.lua uses, without the yellow and the grey.
-COLOURS = ["8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5"]
+# ColorBrewer Set3 in the order radio.lua uses, the yellow and the grey last.
+COLOURS = ["8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5",
+           "ffffb3", "d9d9d9"]
 WHITE_LOGOS = {"venice-classic-radio"}   # white-on-transparent art, sits on the dark default
 DARK_INK_LOGOS = {"rai-radio-classica", "wqxr", "classic-fm"}   # dark ink: the page inverts it for the dark tile
 
@@ -122,6 +123,8 @@ HOMEPAGES = {
     "venice-classic-radio": "https://www.veniceclassicradio.eu/",
     "wqxr": "https://www.wqxr.org/",
     "rai-radio-classica": "https://www.raiplay.it/radio",
+    "cnr-classical": "https://www.cnr.cn/",
+    "pure-nature": "https://mynoise.net/",
 }
 
 # Rai Radio Classica sends no StreamTitle, so its pieces come from the current-song
@@ -650,7 +653,7 @@ class Radio:
                 cmd = (["ffmpeg", "-hide_banner", "-loglevel", "warning",
                         "-reconnect", "1", "-reconnect_streamed", "1",
                         "-reconnect_delay_max", "10", "-user_agent", UA,
-                        "-i", st["url"], "-vn", "-map", "0:a:0", "-ac", "2"]
+                        "-i", st["url"], "-vn", "-map", "0:a:0", "-ac", "2", "-ar", "44100"]
                        + self.enc + ["-f", "tee", tee])
                 self.meta[slug]["started"] = time.time()
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=log,

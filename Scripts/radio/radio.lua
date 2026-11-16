@@ -60,7 +60,8 @@ end
 
 -- Each station has its own colour, ColorBrewer Set3 in order without the yellow and the grey,
 -- used for its banner and for the piece on the status line.
-local COLOURS = { "8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5" }
+local COLOURS = { "8dd3c7", "bebada", "fb8072", "80b1d3", "fdb462", "b3de69", "fccde5", "bc80bd", "ccebc5",
+                  "ffffb3", "d9d9d9" }
 
 local shown, colour = "", COLOURS[1]   -- the last real piece, and the current station's colour
 

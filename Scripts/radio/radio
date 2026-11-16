@@ -51,6 +51,15 @@ GREY, DIM, ORANGE = "\033[38;5;245m", "\033[38;5;240m", "\033[38;2;253;180;98m"
 GREEN = "\033[38;2;179;222;105m"
 R = "\033[0m"
 
+# A station's code, the key that picks it in the player: 1-8, then letters, skipping the
+# player's own keys. radio.lua hands out the same codes.
+LETTERS = "abdfghjkmntuvxyz"
+
+
+def code(i):
+    return str(i) if i <= 8 else LETTERS[i - 9] if i - 9 < len(LETTERS) else ""
+
+
 def mmss(x):
     x = max(0, round(x)); return f"{x // 60}:{x % 60:02d}"
 
@@ -85,10 +94,10 @@ def frame(ip2name, with_events=True):
     nw, rw = (22, 5) if cols >= 80 else (14, 5)   # a phone's width gets narrower columns
     room = cols - nw - rw - 6 - 3 - 3   # the piece takes the rest, one column short of the edge
     out.append(f"{DIM}{'#':>2} {'station':<{nw}}{'rec':<{rw}}{'tape':>6}  piece (live){R}")
-    for i, s in enumerate(st["stations"], 1):   # numbered as radio record 5 takes them
+    for i, s in enumerate(st["stations"], 1):   # coded as radio record 5 or radio record a takes them
         relay = ("●" if s["live"] else "○" if not st["powered"] or not s["enabled"]
                  else "◐")                # recording, stopped, starting: the page's REC circles
-        out.append(f"{DIM}{i:>2}{R} {rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
+        out.append(f"{DIM}{code(i):>2}{R} {rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
                    f" {rgb(s['colour'], relay)}{' ' * (rw - 2)}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
     live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]
@@ -369,8 +378,10 @@ def main(argv):
         say(f"{GREEN}● recording every station to tape{R}" if api("/api/status")["powered"] else "○ not recording")
     elif cmd in ("record", "stop"):                 # named stations only
         st = api("/api/status")
-        named = [x["slug"] for i, x in enumerate(st["stations"])
-                 if any(q == x["slug"] or q.lower() in x["name"].lower() or q == str(i + 1) for q in rest)]
+        codes = {code(i): x["slug"] for i, x in enumerate(st["stations"], 1)}
+        named = [x["slug"] for i, x in enumerate(st["stations"], 1)   # a code picks its one station
+                 if any(q == code(i) if q in codes else q == x["slug"] or q.lower() in x["name"].lower()
+                        for q in rest)]
         if not named:
             sys.exit("no station matches " + " ".join(rest))
         if cmd == "record" and not st["powered"]:   # recording was off: only the named ones start
