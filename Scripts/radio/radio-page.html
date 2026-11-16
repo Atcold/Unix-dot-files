@@ -1,4 +1,5 @@
-<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"><title>AlfDROID radio</title><style>
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1">
+<meta name=darkreader-lock><title>AlfDROID radio</title><style>
 :root{color-scheme:dark}
 body{background:#000;color:#eaeaea;font-family:"Cascadia Code",ui-monospace,Menlo,monospace;
 margin:0 auto;max-width:640px;padding:170px 16px 24px}
@@ -81,7 +82,7 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d41";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d42";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var PID=Math.random().toString(36).slice(2,10);   // this page's own id: the droid keeps one playhead per page
 var HD=null,HKEY='';                              // the piece heard at that playhead, and what the lock screen shows
