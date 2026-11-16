@@ -15,8 +15,8 @@ https://stream.srg-ssr.ch/m/rsj/aacp_96
 https://knkx-live-a.edge.audiocdn.com/6285_128k
 #EXTINF:-1,CNR Classical
 http://satellitepull.cnr.cn/live/wxdszs/playlist.m3u8
-#EXTINF:-1,Tianlai Guofeng
-http://play-radio-stream3.hndt.com/now/UzPxbRaT/chunklist.m3u8
+#EXTINF:-1,Chinese Classical
+https://radio.chinesemusicworld.com/chinesemusic.mp3
 #EXTINF:-1,Pure Nature
 https://purenature-mynoise.radioca.st/stream
 #EXTINF:-1,Nature Rain
@@ -28,4 +28,4 @@ https://boxradio-edge-00.streamafrica.net/rain
 # CNR Voice of China (news)  https://ngcdn001.cnr.cn/live/zgzs/index.m3u8
 # CNR Literature and Arts  http://satellitepull.cnr.cn/live/wxwyzs/playlist.m3u8
 # Shanghai Classical 94.7  https://lhttp-hw.qtfm.cn/live/267/64k.mp3
-# Chinese Classical Music Online Radio  https://radio.chinesemusicworld.com/chinesemusic.mp3
+# Tianlai Guofeng (its HLS segments time out often)  http://play-radio-stream3.hndt.com/now/UzPxbRaT/chunklist.m3u8
