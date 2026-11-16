@@ -94,8 +94,6 @@ UA = radio_core.UA
 AUDIO_BPS = 16000   # bytes per second of a 128 kbit/s MP3 (128000 / 8): how far a lag reaches into a Ring
 RING_MAX = AUDIO_BPS * 300   # five minutes of tape beyond the page's 180 s buffer: a
                              # dropout up to eight minutes costs silence, not music
-LONG_MAX = AUDIO_BPS * 900  # the long tape: one station, 15 min, so the page can sit 10 min behind
-LONG_TGT = 600              # for a river crossing with no signal; the other stations stop meanwhile
 IDLE_OFF = int(os.getenv("RADIO_IDLE_OFF", "900"))   # a recording with no listener for this
                              # many seconds sleeps itself; 0 (or negative) keeps it awake
 
@@ -302,8 +300,7 @@ class Ring:
     Pruning keeps RING_MAX bytes, so a listener whose connection died longer ago
     resumes from the oldest byte still held and skips the gap."""
 
-    def __init__(self, cap=RING_MAX):
-        self.cap = cap           # bytes kept: RING_MAX, or LONG_MAX on the long tape
+    def __init__(self):
         self.cond = threading.Condition()
         self.blocks = collections.deque()   # (pos, bytes), oldest first
         self.size = 0
@@ -324,7 +321,7 @@ class Ring:
             self.blocks.append((self.end, data))
             self.size += len(data)
             self.end += len(data)
-            while self.size > self.cap and len(self.blocks) > 1:
+            while self.size > RING_MAX and len(self.blocks) > 1:
                 _, old = self.blocks.popleft()
                 self.size -= len(old)
                 self.start += len(old)
@@ -496,7 +493,6 @@ class Radio:
         self.powered = False     # the recording switch; relays run only while it is on
         self.muted = set()       # stations left out of the recording even while powered
         self.wanted = set()      # slugs that should be recording right now, from the two above
-        self.long = None         # the one station on the long tape, or None for the normal eight
         self.procs = {}          # slug -> ffmpeg Popen
         self.threads = {}        # slug -> relay thread
         self.rings = {}          # slug -> Ring, alive while its relay is
@@ -529,7 +525,6 @@ class Radio:
                 self.muted = set(data["muted"]) if isinstance(data, dict) else set(data)
                 if isinstance(data, dict):
                     self.powered = bool(data.get("powered"))   # a debug deploy keeps the recording on
-                    self.long = data.get("long") if data.get("long") in self.meta else None
             except Exception:
                 self.muted = set()
         self.sync()
@@ -543,16 +538,13 @@ class Radio:
     def save(self):
         """The muted set and the recording switch are the persistent wishes, so a
         restart for a code update resumes exactly what the page had switched on."""
-        MUTED.write_text(json.dumps({"muted": sorted(self.muted), "powered": self.powered,
-                                     "long": self.long}))
+        MUTED.write_text(json.dumps({"muted": sorted(self.muted), "powered": self.powered}))
 
     def sync(self):
         """Make threads and Rings match the switch and the muted set. The caller holds
         the lock; a dying relay thread notices it is no longer wanted and retires."""
         self.wanted = set() if not self.powered else \
-            ({self.long} if self.long else {st["slug"] for st in self.stations} - set(self.muted))
-        for slug, ring in self.rings.items():   # the long tape grows; back to normal it prunes itself
-            ring.cap = LONG_MAX if slug == self.long else RING_MAX
+            {st["slug"] for st in self.stations} - set(self.muted)
         for slug in list(self.threads):
             if slug not in self.wanted:
                 proc = self.procs.pop(slug, None)
@@ -602,22 +594,6 @@ class Radio:
             self.save()
             self.sync()
 
-    def long_mode(self, slug):
-        """The long tape: slug records alone on 15 min of tape so the page can listen 10 min
-        behind live; None goes back to every unmuted station on 5 min. The long tape starts
-        from what the station already holds and fills in real time."""
-        with self.lock:
-            if slug is not None and slug not in self.meta:
-                return False
-            self.long = slug
-            if slug:
-                self.powered = True
-                self.muted.discard(slug)
-            self.last_listen = time.time()
-            self.save()
-            self.sync()
-        return True
-
     def select(self, slug):
         """Listen to this station: it joins the recording and stays there, and every
         other station keeps recording too, so the next switch has a buffer ready."""
@@ -626,8 +602,6 @@ class Radio:
                 return False
             self.powered = True
             self.muted.discard(slug)
-            if self.long:
-                self.long = slug     # the long tape follows the station listened to
             self.last_listen = time.time()
             self.save()
             self.sync()
@@ -652,7 +626,7 @@ class Radio:
         while True:
             time.sleep(30)
             with self.lock:
-                idle = self.powered and time.time() - self.last_listen > IDLE_OFF * (2 if self.long else 1)
+                idle = self.powered and time.time() - self.last_listen > IDLE_OFF
                 busy = any(self.proxy_listeners.values())
             if idle and not busy and not any(
                     v.get("listeners", 0) for v in self.stats().values()):
@@ -667,7 +641,7 @@ class Radio:
                 if slug not in self.wanted:
                     self.threads.pop(slug, None)
                     return
-                ring = self.rings.setdefault(slug, Ring(LONG_MAX if slug == self.long else RING_MAX))
+                ring = self.rings.setdefault(slug, Ring())
                 tee = (f"[f={self.fmt}]icecast://source:{self.source_pw}@127.0.0.1:"
                        f"{ICECAST_PORT}{self.mount(st)}|[f={self.fmt}]pipe:1")
                 cmd = (["ffmpeg", "-hide_banner", "-loglevel", "warning",
@@ -840,7 +814,7 @@ class Radio:
         h = self.history.get(slug)
         if not h:
             return
-        oldest = time.time() - (LONG_MAX if slug == self.long else RING_MAX) / AUDIO_BPS
+        oldest = time.time() - RING_MAX / AUDIO_BPS
         while len(h) > 1 and h[1]["t"] <= oldest:
             h.pop(0)
 
@@ -1106,7 +1080,7 @@ class Radio:
                     if c["blob"]:
                         heard["art"] = 1        # the bytes are here, so the page can show them
         return {"pid": os.getpid(), "enc": self.ext.lstrip("."), "powered": self.powered,
-                "recent": self.recent, "heard": heard, "long": self.long, "stations": rows}
+                "recent": self.recent, "heard": heard, "stations": rows}
 
     def shutdown(self):
         with self.lock:
@@ -1169,8 +1143,7 @@ def page(radio, host):
     return (PAGE.read_text()
             .replace("%%ICON%%", svg_icon())
             .replace("%%VARS%%", "var ST=" + json.dumps(station_list)
-                     + ",RSEC=" + str(round(RING_MAX / AUDIO_BPS))
-                     + ",LSEC=" + str(round(LONG_MAX / AUDIO_BPS)) + ",LTGT=" + str(LONG_TGT) + ";")
+                     + ",RSEC=" + str(round(RING_MAX / AUDIO_BPS)) + ";")
             .replace("%%MENU%%", menu)
             .replace("%%FOOT%%", foot))
 
@@ -1470,8 +1443,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                        "application/json")
         elif path == "/api/select" and slug:
             self.reply(200, json.dumps({"ok": self.radio.select(slug)}), "application/json")
-        elif path == "/api/long":     # ?slug=… puts that station on the long tape, bare goes back
-            self.reply(200, json.dumps({"ok": self.radio.long_mode(slug or None)}), "application/json")
         elif path == "/api/power":
             self.reply(200, json.dumps({"ok": True, "powered": self.radio.power(
                 params.get("on", "1") == "1")}), "application/json")
