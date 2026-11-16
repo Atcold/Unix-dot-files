@@ -176,15 +176,17 @@ def art_words(name):
 
 def load_stations():
     """Parse the m3u into {name, url, slug, colour}, in file order like radio.lua."""
-    stations, pending = [], None
+    stations, pending, flaky = [], None, False
     for line in M3U.read_text().splitlines():
         line = line.strip()
         if line.startswith("#EXTINF:"):
-            pending = line.split(",", 1)[-1].strip()
+            head, _, pending = line.partition(",")
+            pending = pending.strip()
+            flaky = 'flaky="1"' in head      # a station whose server fails often; shown in italics
         elif line and not line.startswith("#"):
             name = pending or line
-            stations.append({"name": name, "url": line, "slug": slugify(name)})
-            pending = None
+            stations.append({"name": name, "url": line, "slug": slugify(name), "flaky": flaky})
+            pending, flaky = None, False
     for i, st in enumerate(stations):
         st["colour"] = COLOURS[i % len(COLOURS)]
     return stations
@@ -1078,7 +1080,7 @@ class Radio:
                     error = (LOGDIR / (slug + ".log")).read_text().splitlines()[-1][:200]
                 except Exception:
                     pass
-            rows.append({**{k: st[k] for k in ("name", "slug", "url", "colour")},
+            rows.append({**{k: st[k] for k in ("name", "slug", "url", "colour", "flaky")},
                          "mount": self.mount(st), "enabled": slug in self.wanted,
                          "live": live, "restarts": self.meta[slug]["restarts"],
                          "title": self.titles.get(slug, [""])[0],
@@ -1124,7 +1126,8 @@ def page(radio, host):
     for st in radio.stations:
         slug, colour, mount = st["slug"], st["colour"], radio.mount(st)
         url = mount                 # same origin, on the tailnet or through Funnel
-        station_list.append({"slug": slug, "name": st["name"], "url": url, "colour": colour})
+        station_list.append({"slug": slug, "name": st["name"], "url": url, "colour": colour,
+                             "flaky": st["flaky"]})
         logo = LOGOS / (slug + ".img")
         if logo.exists():
             # Rasters carry their own ground; the tile defaults to dark for white art,
@@ -1145,7 +1148,7 @@ def page(radio, host):
             art = f'<span class=tile style="border-color:#{colour};color:#{colour}">{initials}</span>'
         menu_rows.append(
             f'<div class=mrow id=row-{slug} onclick="playRow(\'{slug}\',event)">{art}'
-            f'<div class=text><span class=name style="color:#{colour}">{st["name"]}</span>'
+            f'<div class=text><span class=name style="color:#{colour}{';font-style:italic' if st['flaky'] else ''}">{st["name"]}</span>'
             f'<span class=st id=st-{slug}>off</span></div>'
             f'<span class=pdot id=dot-{slug} title="on"></span></div>')
     # The client is the template file next to the server, read fresh every request:

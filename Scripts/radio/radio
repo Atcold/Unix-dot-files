@@ -48,6 +48,7 @@ def rgb(hexs, s):
     return f"\033[38;2;{r};{g};{b}m{s}\033[0m"
 
 GREY, DIM, ORANGE = "\033[38;5;245m", "\033[38;5;240m", "\033[38;2;253;180;98m"
+ITALIC = "\033[3m"   # a station whose server fails often (flaky in radio.m3u)
 GREEN = "\033[38;2;179;222;105m"
 R = "\033[0m"
 
@@ -97,7 +98,7 @@ def frame(ip2name, with_events=True):
     for i, s in enumerate(st["stations"], 1):   # coded as radio record 5 or radio record a takes them
         relay = ("●" if s["live"] else "○" if not st["powered"] or not s["enabled"]
                  else "◐")                # recording, stopped, starting: the page's REC circles
-        out.append(f"{DIM}{code(i):>2}{R} {rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
+        out.append(f"{DIM}{code(i):>2}{R} {ITALIC if s.get('flaky') else ''}{rgb(s['colour'], f'{s['name'][:nw - 1]:<{nw}}')}"
                    f" {rgb(s['colour'], relay)}{' ' * (rw - 2)}{mmss(s['ring']):>6}  {GREY + s['title'][:room] if s['title'] else DIM + 'the station sends no title'[:room]}{R}")
     out += ["", f"{DIM}listeners in the last 10 minutes{R}"]
     live = [(c, x) for c, x in cl.items() if now - x.get("seen", x.get("segt", 0)) < 600 and x.get("slug")]

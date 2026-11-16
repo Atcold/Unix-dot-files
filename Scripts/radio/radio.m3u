@@ -23,18 +23,19 @@ https://purenature-mynoise.radioca.st/stream
 https://maggie.torontocast.com:2020/stream/natureradiorain
 #EXTINF:-1,Rain and Thunder
 https://boxradio-edge-00.streamafrica.net/rain
-#EXTINF:-1,CNR Voice of China
+#EXTINF:-1 flaky="1",CNR Voice of China
 https://ngcdn001.cnr.cn/live/zgzs/index.m3u8
-#EXTINF:-1,CNR Literature and Arts
+#EXTINF:-1 flaky="1",CNR Literature and Arts
 http://satellitepull.cnr.cn/live/wxwyzs/playlist.m3u8
-#EXTINF:-1,Shanghai Classical
+#EXTINF:-1 flaky="1",Shanghai Classical
 https://lhttp-hw.qtfm.cn/live/267/64k.mp3
-#EXTINF:-1,Harbin Classical
+#EXTINF:-1 flaky="1",Harbin Classical
 http://lhttp.qingting.fm/live/5022338/64k.mp3
-#EXTINF:-1,Shanghai 947 Europe Live
+#EXTINF:-1 flaky="1",Shanghai 947 Europe Live
 https://rscdn.ajmide.com/r_3830/nglive_3830.m3u8
-#EXTINF:-1,Bach Radio
+#EXTINF:-1 flaky="1",Bach Radio
 https://rscdn.ajmide.com/r_3146/nglive_3146.m3u8
+# flaky="1" marks a station whose server fails often; the page and radio status show it in italics.
 # Stations kept aside, one per line as name and stream; players skip these lines.
 # Secret Agent  https://ice2.somafm.com/secretagent-128-mp3
 # Tianlai Guofeng (its HLS segments time out often)  http://play-radio-stream3.hndt.com/now/UzPxbRaT/chunklist.m3u8

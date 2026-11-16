@@ -82,7 +82,7 @@ var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d45";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d46";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var PID=Math.random().toString(36).slice(2,10);   // this page's own id: the droid keeps one playhead per page
 var HD=null,HKEY='';                              // the piece heard at that playhead, and what the lock screen shows
@@ -167,6 +167,7 @@ function setBar(){
   var playing=want&&snd&&!snd.paused&&Date.now()-lastbeat<6000;
   rep('bar-tgl').innerHTML=playing?ICONS.pause:ICONS.play;rep('bar-stop').disabled=!want;
   rep('pick-name').textContent=now?(st.name||''):'choose a station';
+  rep('pick-name').style.fontStyle=now&&st.flaky?'italic':'';   // a station whose server fails often
   rep('pick').style.color=now&&st.colour?'#'+st.colour:'';
   var art=rep('pick-art'),src=now&&rep('row-'+now)&&rep('row-'+now).querySelector('img,.tile');
   if(art.dataset.slug!==(now||'')){art.dataset.slug=now||'';art.innerHTML='';if(src)art.appendChild(src.cloneNode(true))}
