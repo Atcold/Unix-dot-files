@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>AlfDROID</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#111;color:#ddd;font:16px -apple-system,system-ui,sans-serif;padding:24px 16px}
+h1{font-size:22px;font-weight:600;margin:0 0 18px}
+.card{border:1px solid #333;border-left:4px solid var(--c);border-radius:12px;padding:14px 16px;margin:0 0 14px;max-width:520px}
+.card h2{font-size:18px;margin:0 0 2px;color:var(--c)}
+.card p{margin:0 0 12px;color:#9a9a9a;font-size:14px}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{flex:1 1 40%;text-align:center;text-decoration:none;color:#ddd;border:1px solid #444;border-radius:10px;padding:10px 6px;font-size:14px;min-width:0}
+.links a small{display:block;overflow-wrap:anywhere;color:#7a7a7a;font-size:11px;margin-top:2px}
+</style></head><body>
+<h1>AlfDROID</h1>
+<div class=card style="--c:#80b1d3"><h2>Radio</h2><p>Eight stations, three minutes behind live</p>
+<div class=links><a href="http://%%HOST%%:8080/">tailnet<small>%%HOST%%:8080</small></a>%%RADIO_PUBLIC%%</div></div>
+<div class=card style="--c:#fdb462"><h2>Cucina</h2><p>Recipes</p>
+<div class=links><a href="http://%%HOST%%:8082/">tailnet<small>%%HOST%%:8082</small></a></div></div>
+</body></html>

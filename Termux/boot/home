@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Run by Termux:Boot when the phone starts: AlfDROID's homepage on :8000, linking its services.
+if ! pgrep -f "home/home-server.py" > /dev/null; then
+    setsid -f python3 $HOME/.settings/Termux/home/home-server.py > /dev/null 2>&1 < /dev/null
+fi

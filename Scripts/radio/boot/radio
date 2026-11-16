@@ -4,8 +4,8 @@
 # Termux:Boot has to be installed, and the screen lock set to None, or Android keeps the
 # apps asleep until someone unlocks. install.sh --boot puts this in ~/.termux/boot.
 $HOME/.settings/Scripts/radio/radio-server.py up
-# AlfRADIO: a second Tailscale, built in Termux and run without root, whose Funnel puts
-# the page on the internet; its login and Funnel setting live in its state folder.
+# AlfFUNNEL: a second Tailscale, built in Termux and run without root, whose Funnel puts
+# the homepage and the radio on the internet; its login and Funnel setting live in its state folder.
 TS=$HOME/.local/share/tailscale
 if [ -x $HOME/.local/bin/tailscaled ] && ! pgrep -f "bin/tailscaled " > /dev/null; then
     setsid -f $HOME/.local/bin/tailscaled --tun=userspace-networking --statedir=$TS \
