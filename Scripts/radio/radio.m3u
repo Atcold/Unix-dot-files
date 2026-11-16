@@ -13,7 +13,7 @@ http://icestreaming.rai.it/5.mp3
 https://stream.srg-ssr.ch/m/rsj/aacp_96
 #EXTINF:-1,Jazz24
 https://knkx-live-a.edge.audiocdn.com/6285_128k
-#EXTINF:-1,CNR Classical
+#EXTINF:-1,CNR Classic Hits
 http://satellitepull.cnr.cn/live/wxdszs/playlist.m3u8
 #EXTINF:-1,Chinese Classical
 https://radio.chinesemusicworld.com/chinesemusic.mp3
@@ -27,7 +27,14 @@ https://boxradio-edge-00.streamafrica.net/rain
 https://ngcdn001.cnr.cn/live/zgzs/index.m3u8
 #EXTINF:-1,CNR Literature and Arts
 http://satellitepull.cnr.cn/live/wxwyzs/playlist.m3u8
+#EXTINF:-1,Shanghai Classical
+https://lhttp-hw.qtfm.cn/live/267/64k.mp3
+#EXTINF:-1,Harbin Classical
+http://lhttp.qingting.fm/live/5022338/64k.mp3
+#EXTINF:-1,Shanghai 947 Europe Live
+https://rscdn.ajmide.com/r_3830/nglive_3830.m3u8
+#EXTINF:-1,Bach Radio
+https://rscdn.ajmide.com/r_3146/nglive_3146.m3u8
 # Stations kept aside, one per line as name and stream; players skip these lines.
 # Secret Agent  https://ice2.somafm.com/secretagent-128-mp3
-# Shanghai Classical 94.7  https://lhttp-hw.qtfm.cn/live/267/64k.mp3
 # Tianlai Guofeng (its HLS segments time out often)  http://play-radio-stream3.hndt.com/now/UzPxbRaT/chunklist.m3u8
