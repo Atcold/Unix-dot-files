@@ -1,7 +1,9 @@
 #!/usr/bin/env -S uv run --quiet --with pillow python3
 """Dark versions of the bright station logos, for the page's dark tiles. It fetches
 each logo from the droid's page server, draws its dark version, and copies it into
-the droid's logos folder as <slug>-dark.img, which the page asks for by name.
+the droid's logos folder as <slug>-dark.img, which the page asks for by name. It also
+draws each station's square tile, <slug>-art.img, and the page's home-screen icon,
+app-icon.img.
 
     ./logos-dark [host]        # host defaults to alfdroid
 """
@@ -122,6 +124,12 @@ with tempfile.TemporaryDirectory() as tmp:
     rai = rai_letters(fetch("rai-radio-classica"))
     (Path(tmp) / "rai-radio-classica-dark.img").write_bytes(rai)
     dark["rai-radio-classica"] = rai
+    # The home-screen icon: the page's radio drawing on the dark ground, 180 px as iOS wants
+    svg = urllib.request.urlopen(f"http://{HOST}:8080/favicon.ico", timeout=15).read()
+    fg = raster(svg, 120)
+    icon = Image.new("RGB", (180, 180), DARK)
+    icon.paste(fg, (30, 30), fg)
+    icon.save(Path(tmp) / "app-icon.img", "PNG")
     for slug in SLUGS:
         try:
             src = dark.get(slug) or fetch(slug)
