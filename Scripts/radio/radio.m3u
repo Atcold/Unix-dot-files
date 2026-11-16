@@ -23,9 +23,11 @@ https://purenature-mynoise.radioca.st/stream
 https://maggie.torontocast.com:2020/stream/natureradiorain
 #EXTINF:-1,Rain and Thunder
 https://boxradio-edge-00.streamafrica.net/rain
+#EXTINF:-1,CNR Voice of China
+https://ngcdn001.cnr.cn/live/zgzs/index.m3u8
+#EXTINF:-1,CNR Literature and Arts
+http://satellitepull.cnr.cn/live/wxwyzs/playlist.m3u8
 # Stations kept aside, one per line as name and stream; players skip these lines.
 # Secret Agent  https://ice2.somafm.com/secretagent-128-mp3
-# CNR Voice of China (news)  https://ngcdn001.cnr.cn/live/zgzs/index.m3u8
-# CNR Literature and Arts  http://satellitepull.cnr.cn/live/wxwyzs/playlist.m3u8
 # Shanghai Classical 94.7  https://lhttp-hw.qtfm.cn/live/267/64k.mp3
 # Tianlai Guofeng (its HLS segments time out often)  http://play-radio-stream3.hndt.com/now/UzPxbRaT/chunklist.m3u8
