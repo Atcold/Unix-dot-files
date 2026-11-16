@@ -67,7 +67,6 @@ max-width:640px;margin:0 auto;box-sizing:border-box}
 #bar-title{font-size:12px;color:#9a9a9a}
 #watch{font-size:10px;color:#9a9a9a;white-space:pre;overflow-x:auto;margin:12px 0 0;line-height:1.45}
 #dbg{font-size:11px;color:#80b1d3;white-space:pre-wrap;margin:8px 0 0;line-height:1.6}
-#bar-pw.on{border-color:#b3de69;color:#b3de69}
 #acts button{flex:1 1 28%;font-size:12px;padding:11px 4px;border-radius:10px;white-space:nowrap}
 #mask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:4}
 #menu{position:fixed;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top));width:min(640px,calc(100% - 24px));
@@ -77,13 +76,13 @@ max-height:62vh;overflow-y:auto;box-shadow:0 6px 24px rgba(0,0,0,.7)}
 .pdh{flex:none;padding:12px;margin:-12px -12px -12px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #pick{flex:1;min-width:0;border-color:#3a3a3a;font-size:16px;padding:7px 14px 7px 8px;border-radius:22px;display:flex;align-items:center;gap:9px;line-height:0}
 #pick-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;line-height:1.3;text-align:left}
-</style></head><body><h2 class=pl>queue</h2><div id=played></div><div id=dbgbox><div id=tapewrap><div id=tscale></div><div id=tape><span id=tape-fill></span><span id=tape-tgt></span><span id=tape-head></span></div><div id=tlegend><span id=tl-heard>already heard</span><span id=tl-held>on the phone</span></div></div><pre id=dbg></pre><pre id=watch></pre></div><div id=mask onclick="menu(0)"></div><div id=menu>%%MENU%%</div><div id=player><header><h1 id=dbglink onclick="dbg()">AlfDROID radio %%ICON%%</h1><button id=rec onclick="pw()">○ REC</button><span id=svc></span></header><div id=bar-ctl><button id=pick onclick="menu(1)"><span id=pick-art></span><span id=pick-name>radio</span><span id=pick-caret>▾</span></button><button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button><button id=bar-stop onclick="stop()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button></div><div id=bar-piece><span id=bar-artist></span><span id=bar-title></span></div><div id=gauge-row><span id=gauge><span id=g-fill></span></span><span id=g-txt></span></div></div><footer>%%FOOT%%</footer><div id=acts><button id=bar-pw onclick="pw()">recording</button><button onclick="rst()">⇣ refill</button><button onclick="location.reload()">page</button><button onclick="dbg()">debug off</button></div><script>%%VARS%%</script>
+</style></head><body><h2 class=pl>queue</h2><div id=played></div><div id=dbgbox><div id=tapewrap><div id=tscale></div><div id=tape><span id=tape-fill></span><span id=tape-tgt></span><span id=tape-head></span></div><div id=tlegend><span id=tl-heard>already heard</span><span id=tl-held>on the phone</span></div></div><pre id=dbg></pre><pre id=watch></pre></div><div id=mask onclick="menu(0)"></div><div id=menu>%%MENU%%</div><div id=player><header><h1 id=dbglink onclick="dbg()">AlfDROID radio %%ICON%%</h1><button id=rec onclick="pw()">○ REC</button><span id=svc></span></header><div id=bar-ctl><button id=pick onclick="menu(1)"><span id=pick-art></span><span id=pick-name>radio</span><span id=pick-caret>▾</span></button><button id=bar-tgl onclick="tgl()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15c0 .8.9 1.3 1.6.9l11.4-7.5c.6-.4.6-1.4 0-1.8L8.6 3.6C7.9 3.2 7 3.7 7 4.5z"/></svg></button><button id=bar-stop onclick="stop()"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button></div><div id=bar-piece><span id=bar-artist></span><span id=bar-title></span></div><div id=gauge-row><span id=gauge><span id=g-fill></span></span><span id=g-txt></span></div></div><footer>%%FOOT%%</footer><div id=acts><button onclick="rst()">⇣ refill</button><button onclick="location.reload()">page</button><button onclick="dbg()">debug off</button></div><script>%%VARS%%</script>
 <script>
 var snd=null,ms=null,sb=null,abort=null,pos=null,now=null,want=false;
 var titles={},enabled=[],COL={},lastName=null,BR={},RNG={},powered=false;
 var TGT=180;                         // the page always listens three minutes behind live,
                                      // a Manhattan tunnel run in the phone's own memory
-var BUILD="d44";   // client stamp, shown by the debug panel: bump on every client ship
+var BUILD="d45";   // client stamp, shown by the debug panel: bump on every client ship
 var svcText='',stat='',lastc=-1,lastbeat=0,retrySeq=0,started=0,BPS=16000,END=0,ENDT=0,S=null,CID=null,ME=null,MET=0,fails=0;
 var PID=Math.random().toString(36).slice(2,10);   // this page's own id: the droid keeps one playhead per page
 var HD=null,HKEY='';                              // the piece heard at that playhead, and what the lock screen shows
@@ -293,9 +292,7 @@ function refresh(){
     (asked?'&slug='+asked+'&at='+w.toFixed(1):'')     // where this page listens: the droid answers with the piece there
     ).then(function(r){return r.json()}).then(function(s){
     if(asked)HD=(asked===now&&s.heard)?s.heard:null;   // a page reporting nothing keeps the piece it last named
-    powered=!!s.powered;var p=rep('bar-pw');
-    p.textContent=powered?'recording on':'recording off';
-    p.className=powered?'on':'';
+    powered=!!s.powered;
     var rc=rep('rec');rc.textContent=powered?'● REC':'○ REC';rc.className=powered?'on':'';
     enabled=[];
     s.stations.forEach(function(st){
