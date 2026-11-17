@@ -105,7 +105,7 @@ mp.observe_property("audio-bitrate", "number", function(_, bps)
   if started then
     io.write("\27[1A\r\27[K")  -- remove the status line mpv leaves behind at a switch
   else
-    say("<  >" .. dim("  station   ·   ") .. "1-8 a-z" .. dim("  jump   ·   ") .. "9  0" .. dim("  volume   ·   ") .. "c" .. dim("  channels   ·   ") .. "space" .. dim("  pause   ·   ") .. "q" .. dim("  quit"))
+    say("<  >" .. dim("  station   ·   ") .. "1-8 a-z" .. dim("  jump   ·   ") .. "9  0" .. dim("  volume   ·   ") .. "c" .. dim("  channels   ·   ") .. "space" .. dim("  pause   ·   ") .. "l" .. dim("  like   ·   ") .. "q" .. dim("  quit"))
     started = true
   end
   for _, line in ipairs(blocky(pending.name)) do say(rgb(pending.colour, line)) end
@@ -197,6 +197,31 @@ local function ask_droid(station)
   })
   local answer = r and r.status == 0 and utils.parse_json(r.stdout or "")
   return answer and answer.title
+end
+
+-- l: like the piece playing now, the page's rule: the announced piece at the playhead,
+-- not the raw stream title. The droid owns the slugs and liked.json, so one python3
+-- looks up the on-air name's slug in /api/status, then toggles the piece in /api/like.
+-- quote(safe='') encodes like the page's encodeURIComponent, so both paths name one entry.
+-- capture_stderr keeps python's traceback (an HTTPError from a droid too old for
+-- /api/like) out of the pane. Every failed ask answers nil: a dead droid, an HTTP
+-- error, a non-zero exit or unparsable output; true or false only when it answered.
+local function ask_like(station, title)
+  local r = utils.subprocess({
+    args = { "python3", "-c",
+      "import json,sys,urllib.request,urllib.parse;" ..
+      "d=json.load(urllib.request.urlopen(sys.argv[1]+'/api/status',timeout=4));" ..
+      "s=next((s for s in d['stations'] if s['name']==sys.argv[2]),None);s or sys.exit(2);" ..
+      "q='slug='+urllib.parse.quote(s['slug'],safe='')+'&piece='+urllib.parse.quote(sys.argv[3],safe='');" ..
+      "r=json.load(urllib.request.urlopen(sys.argv[1]+'/api/like?'+q,timeout=4));" ..
+      "print(json.dumps({'liked':bool(r.get('liked'))}))",
+      "http://" .. HOST .. ":8080", station, title },
+    capture_stdout = true, capture_stderr = true, playback_only = false,
+  })
+  if not r or r.status ~= 0 then return nil end
+  local answer = utils.parse_json(r.stdout or "")
+  if type(answer) ~= "table" then return nil end
+  return answer.liked and true or false
 end
 
 -- One path for a title from any source: clean it, drop the station's own announcements,
@@ -301,6 +326,20 @@ mp.add_key_binding(">", "station-next", function()
   modal_off()
   local n = mp.get_property_number("playlist-count", 1)
   mp.set_property("playlist-pos", (mp.get_property_number("playlist-pos", 0) + 1) % n)
+end)
+
+-- l likes what is playing now: the announced piece, never the station's own name shown
+-- before the first title lands (watching is empty then, so there is nothing to like).
+mp.add_key_binding("l", "like-piece", function()
+  local title = watching and watching.title
+  if not title then
+    say(dim("nothing to like yet"))
+    return
+  end
+  local liked = ask_like(on_air(), title)
+  if liked == nil then say(dim("like: droid unreachable"))
+  elseif liked then say(rgb("fb8072", "♥ liked"))
+  else say(dim("♡ unliked")) end
 end)
 
 mp.register_event("end-file", function()

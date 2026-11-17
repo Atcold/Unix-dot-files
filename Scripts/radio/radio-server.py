@@ -53,7 +53,7 @@ import urllib.request
 import unicodedata
 import uuid
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 try:
     import paho.mqtt.client as mqtt          # the Rai reader below; install.sh adds it on the droid
@@ -84,6 +84,7 @@ LOGOS = STATE / "logos"
 PIDFILE = STATE / "radio.pid"
 CONFIG = STATE / "icecast.xml"
 MUTED = STATE / "muted.json"
+LIKED = STATE / "liked.json"
 LOGTSV = STATE / "log.tsv"
 PAGE = Path(__file__).with_name("radio-page.html")
 
@@ -190,6 +191,26 @@ def load_stations():
     for i, st in enumerate(stations):
         st["colour"] = COLOURS[i % len(COLOURS)]
     return stations
+
+
+LIKES_LOCK = threading.Lock()   # one lock over liked.json: the page and radio.lua tap from two boxes
+
+
+def load_liked():
+    """The like list, oldest first; a machine nobody has liked on yet is simply empty."""
+    try:
+        data = json.loads(LIKED.read_text())
+    except (FileNotFoundError, ValueError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def save_liked(entries):
+    """Rewrite liked.json through a temp name, so a poll that reads mid-write still
+    gets a whole list and never half a file."""
+    tmp = LIKED.with_name(LIKED.name + f".tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(entries, ensure_ascii=False))
+    os.replace(tmp, LIKED)
 
 
 def encoder():
@@ -1511,6 +1532,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/off-all":
             self.radio.set_all(False)
             self.reply(200, '{"ok":true}', "application/json")
+        elif path == "/api/likes":
+            with LIKES_LOCK:
+                entries = load_liked()
+            self.reply(200, json.dumps(entries, ensure_ascii=False), "application/json")
+        elif path == "/api/like" and slug and params.get("piece"):
+            # The query parser above keeps the %XX the page encoded, so the values come
+            # off it whole here. One tap toggles: the same slug and piece leaves again.
+            slug, piece = unquote(slug), unquote(params["piece"])
+            st = next((s for s in self.radio.stations if s["slug"] == slug), None)
+            if st is None:
+                self.reply(404, "not found", "text/plain")
+            else:
+                with LIKES_LOCK:
+                    entries = load_liked()
+                    at = next((i for i, e in enumerate(entries)
+                               if e.get("slug") == slug and e.get("piece") == piece), None)
+                    if at is None:
+                        entries.append({"time": time.strftime("%Y-%m-%d %H:%M"), "slug": slug,
+                                        "station": st["name"], "piece": piece})
+                    else:
+                        entries.pop(at)
+                    save_liked(entries)
+                    liked = at is None
+                self.reply(200, json.dumps({"ok": True, "liked": liked}), "application/json")
         elif path == "/api/shutdown":
             self.reply(200, '{"ok":true}', "application/json")
             self.radio.shutdown()
