@@ -26,6 +26,7 @@
 ## Shared tmux panes
 
 - If my window has no split, split it: side by side on a horizontal screen, stacked on a vertical one.
+- Before every `tmux send-keys` into a pane, in the same step, look at `#{pane_current_command}` and the pane’s last lines. Type only into a shell prompt; anything else (mpv, an editor, a viewer) takes the keys as commands. A check from earlier doesn’t count, because I may have started something since.
 - Confirm the host from the prompt first. When you aren’t showing me something, check a remote machine with `ssh host '…'`.
 - `clear` is its own step, followed by the command, so I can see what you type.
 - Bash runs ble.sh in vi mode. Empty the buffer with `Escape`, then `dd`, then check it’s empty before typing `i`. `C-c` at a prompt only switches to normal mode. End every bash command with `C-j`, because Return doesn’t run a multi-line one.
