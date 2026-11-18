@@ -4,7 +4,10 @@
 # that have a status: line, their subprojects (a folder's notes, as folder.note), each lesson of
 # learning-with-claude as <project>.lesson, and the projects Taskwarrior already holds.
 # A project's key (the key: in its note) also matches, so pro:rd offers radio.
+# After pro. Tab offers the modifiers (has, is, startswith, …); after pro.has: it offers the
+# parts of the names, like lesson, and after the other modifiers the whole names.
 # After ow: (or owner:), Tab offers the values in uda.owner.values.
+# After dep: (or depends:), Tab offers the IDs of the pending tasks.
 
 # One line per vault project: name, a tab, and its key (empty when it has none)
 function _para_task_vault {
@@ -58,6 +61,26 @@ function _para_task {
             COMPREPLY=($(_para_task_match "${cur#*:}" | sed "s/^/${cur%%:*}:/"))
             __ltrim_colon_completions "$cur"
             return ;;
+        pro.*:*|proj.*:*|proje.*:*|projec.*:*|project.*:*)
+            local mod=${cur%%:*} val=${cur#*:} IFS=$'\n'
+            mod=${mod#*.}
+            case $mod in
+                has|hasnt|contains)   # a substring: offer the parts of the names, like lesson
+                    COMPREPLY=($(para_task_projects | cut -f1 | tr . '\n' | sort -u |
+                        awk -v v="$val" 'index($0, v) == 1' | sed "s/^/${cur%%:*}:/")) ;;
+                *)
+                    COMPREPLY=($(_para_task_match "$val" | sed "s/^/${cur%%:*}:/")) ;;
+            esac
+            __ltrim_colon_completions "$cur"
+            return ;;
+        pro.*|proj.*|proje.*|projec.*|project.*)
+            COMPREPLY=($(compgen -W "has hasnt is isnt startswith endswith not none any" \
+                -P "${cur%%.*}." -S : -- "${cur#*.}"))
+            return ;;
+        dep:*|depe:*|depen:*|depend:*|depends:*)
+            COMPREPLY=($(compgen -W "$(task _ids)" -P "${cur%%:*}:" -- "${cur#*:}"))
+            __ltrim_colon_completions "$cur"
+            return ;;
         ow:*|own:*|owne:*|owner:*)
             COMPREPLY=($(compgen -W "$(task _get rc.uda.owner.values | tr , ' ')" -P "${cur%%:*}:" -- "${cur#*:}"))
             __ltrim_colon_completions "$cur"
@@ -65,6 +88,24 @@ function _para_task {
     esac
     _task "$@"
 }
+
+# In ble.sh, the dep: menu shows each task's description beside its ID; every other word
+# goes to the bash completion above.
+if [[ ${BLE_VERSION-} ]]; then
+    function ble/cmdinfo/complete:task {
+        if [[ $COMPV =~ ^(dep|depe|depen|depend|depends):([0-9]*)$ ]]; then
+            local pre=${BASH_REMATCH[1]}: typed=${BASH_REMATCH[2]} id desc flag_source_filter=1
+            bleopt complete_menu_style=desc   # for this menu only: ble.sh scopes it to the source
+            ble/complete/cand/yield.initialize word
+            while IFS=: read -r id desc; do
+                [[ $id == "$typed"* ]] && ble/complete/cand/yield word "$pre$id" "$desc"
+            done < <(task _zshids | sort -n)
+            return 0
+        fi
+        local cmd=task
+        ble/complete/progcomp/.compgen "$1"
+    }
+fi
 
 # Homebrew's task completion defines _task; load it first if bash-completion has not yet.
 declare -F _task >/dev/null || source "$(brew --prefix)/etc/bash_completion.d/task.sh" 2>/dev/null
