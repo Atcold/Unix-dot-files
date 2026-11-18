@@ -8,6 +8,77 @@
 # parts of the names, like lesson, and after the other modifiers the whole names.
 # After ow: (or owner:), Tab offers the values in uda.owner.values.
 # After dep: (or depends:), Tab offers the IDs of the pending tasks.
+# `task 6` (one ID alone) shows the top of `task 6 info`, its labels coloured; `task 6,7` shows
+# the card report from taskrc; `task 6 info` keeps the full view.
+
+# Taskwarrior runs its full info report for IDs alone; the shell turns that into the short views.
+function task {
+    if (($# == 1)) && [[ $1 =~ ^[0-9]+$ ]]; then
+        command task rc.color=off rc.verbose=label rc.journal.info=0 "$1" info |
+            awk 'function lab(s) { return sprintf("\033[1;38;2;128;177;211m%-13s\033[0m", s) }
+                 NR == 1 {w = index($0, "Value") - 1; next}   # the label column width
+                 /^-+ -+$/ {next}
+                 /^$/ {exit}                                  # the urgency arithmetic follows
+                 {l = substr($0, 1, w); v = substr($0, w + 1); sub(/ +$/, "", l)
+                  if (l == "") { val[last] = val[last] "\n" lab("") v; next }   # an annotation
+                  if (l == "Description") v = "\033[1m" v "\033[0m"
+                  last = l; val[l] = v; order[++n] = l}
+                 END {
+                   # The project is the theme, so it comes first, then the description; the ID
+                   # was typed, and the bookkeeping fields stay in info.
+                   print lab("Project") val["Project"]
+                   print lab("Description") val["Description"]
+                   # The rest repeats what the lists show, so it sits below a gap, in grey, on one line.
+                   print ""
+                   rest = "Status: " val["Status"] ", Urgency: " val["Urgency"] ", Owner: " val["Owner"]
+                   for (i = 1; i <= n; i++) {
+                     l = order[i]
+                     if (l ~ /^(ID|Project|Description|Status|Urgency|Owner|Virtual tags|UUID|Last modified)$/) continue
+                     v = val[l]
+                     if (l ~ /^(Entered|Start|Due|Wait|Scheduled|Until|End)/ && match(v, /\(.*\)/))
+                       v = substr(v, RSTART + 1, RLENGTH - 2) " ago"   # the age, not the timestamp
+                     sub(/^This task /, "", l); l = toupper(substr(l, 1, 1)) substr(l, 2)
+                     rest = rest ", " l ": " v
+                   }
+                   print "\033[2m" rest "\033[0m"
+                 }'
+    elif (($# == 1)) && [[ $1 =~ ^[0-9]+([,-][0-9]+)*$ ]]; then
+        command task "$1" card
+    elif [[ -t 1 ]] && ! [[ " $* " =~ \ (add|annotate|append|config|context|delete|denotate|done|duplicate|edit|import|log|modify|prepend|purge|start|stop|sync|undo)\  ]]; then
+        # A list on the terminal: keep Taskwarrior's colours and width through the pipe, colour
+        # each annotation count [N] cyan, so a task with more to it stands out, set the header
+        # in bold blue as task 6's labels with a grey rule under it in place of the dashes, which
+        # first give the Deps column's width, and
+        # the count of tasks at the end in grey.
+        command task rc._forcecolor=on rc.defaultwidth="$COLUMNS" "$@" |
+            sed -E -e $'s/ \\[([0-9]+)\\]/ \033[36m[\\1]\033[39m/g' \
+                -e $'s/^[0-9]+ (tasks?|projects?)\r?$/\033[2m&\033[0m/' |
+            awk '/^(ID|Project|Deps) / {
+                     sub(/\r$/, ""); sub(/Urg$/, " Urg")   # right-aligned, as the numbers under it
+                     # Where the Deps column starts; the dashes under the header give its width
+                     ds = 0; if (match($0, /(^| )Deps( |$)/)) ds = RSTART + ($0 ~ /^Deps/ ? 0 : 1)
+                     printf "\033[1;38;2;128;177;211m%s\033[0m\n\033[2m", $0
+                     for (i = 0; i < length($0); i++) printf "─"
+                     printf "\033[0m\n"; dashes = 1; next}
+                 dashes { dashes = 0; sub(/\r$/, "")
+                     if (ds) { match(substr($0, ds), /^-+/); dw = RLENGTH }
+                     next}
+                 ds {   # right-align the IDs in the Deps cell; colour codes take no columns
+                     v = 0; b = 0; line = $0
+                     for (i = 1; i <= length(line); i++) {
+                         if (substr(line, i, 1) == "\033") { match(substr(line, i), /m/); i += RSTART - 1; continue }
+                         if (++v == ds) { b = i; break }
+                     }
+                     if (b) { cell = substr(line, b, dw)
+                         if (cell ~ /^[0-9,]+ +$/) { t = cell; sub(/ +$/, "", t)
+                             $0 = substr(line, 1, b - 1) sprintf("%" dw "s", t) substr(line, b + dw) } }
+                 }
+                 {print}'
+        return "${PIPESTATUS[0]}"
+    else
+        command task "$@"
+    fi
+}
 
 # One line per vault project: name, a tab, and its key (empty when it has none)
 function _para_task_vault {
