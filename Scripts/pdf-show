@@ -4,7 +4,8 @@
   pdf-show a.pdf [b.pdf …]
 
 Between sunset and sunrise they open in Preview with View ▸ Use Dark Appearance for PDF, after
-every Preview document is closed (Preview names windows by file name alone). In daylight they open
+every Preview document is closed (Preview names windows by file name alone); a PDF whose first page
+is already dark, such as slides on black, keeps its own colours. In daylight they open
 in Skim, which reloads them on every rebuild. Sunset comes from the time zone's main city.
 """
 import datetime as dt, math, os, subprocess, sys, time
@@ -57,6 +58,14 @@ def target_screen():
     return (beside or [s for s in screens if s is not here] or [here])[0]
 
 
+def dark_page(f):
+    """True when the first page is mostly dark already (slides on black), so it stays as it is."""
+    pgm = subprocess.run(['pdftoppm', '-r', '10', '-gray', '-f', '1', '-l', '1', '-singlefile', f],
+                         capture_output=True).stdout
+    pixels = pgm.split(b'\n', 3)[-1] if pgm.startswith(b'P5') else b''
+    return bool(pixels) and sum(pixels) / len(pixels) < 128
+
+
 files = [os.path.abspath(f) for f in sys.argv[1:]]
 names = [os.path.basename(f) for f in files]
 dark = night()
@@ -71,10 +80,10 @@ x, y, w, h = target_screen()
 cols = max(1, min(len(files), int(w // 720)))  # Preview keeps a window at least about 708 wide
 rows = math.ceil(len(files) / cols)
 col, row = int(w // cols), int(h // rows)
-for i, name in enumerate(names):
+for i, (f, name) in enumerate(zip(files, names)):
     set_dark = '''
     set mi to menu item "Use Dark Appearance for PDF" of menu "View" of menu bar 1
-    if (value of attribute "AXMenuItemMarkChar" of mi) is missing value then click mi''' if dark else ''
+    if (value of attribute "AXMenuItemMarkChar" of mi) is missing value then click mi''' if dark and not dark_page(f) else ''
     osa(f'''tell application "{app}" to activate
     tell application "System Events" to tell process "{app}"
       set w to (first window whose name starts with "{name}")
