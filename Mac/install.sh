@@ -7,6 +7,9 @@ brew install mac-mouse-fix
 pipx install python-kasa  # kasa: Kasa smart plugs over the LAN
 mkdir -p $HOME/.local/bin  # spark: AlfSPARK on/off from anywhere (Scripts/README.md)
 ln -sf "$(cd "$(dirname "$0")/.." && pwd)/Scripts/spark.py" $HOME/.local/bin/spark
+brew install task  # Taskwarrior: config and tasks shared through Dropbox
+mkdir -p $HOME/.config
+ln -sfn $HOME/Dropbox/Apps/taskwarrior/config $HOME/.config/task
 
 echo 'Done.'
 
