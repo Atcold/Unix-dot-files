@@ -105,6 +105,34 @@ if [[ ${BLE_VERSION-} ]]; then
         local cmd=task
         ble/complete/progcomp/.compgen "$1"
     }
+
+    # Colours while typing: task's commands (add, modify, done, …) orange and name:value
+    # attributes (pro:radio, depends:3) lavender, as in the slides; every other word keeps
+    # ble.sh's own colour, so a quoted description stays green.
+    _para_task_commands='add|annotate|append|blocked|blocking|calendar|context|count|delete|denotate|done|duplicate|edit|export|info|list|log|long|ls|minimal|modify|newest|next|oldest|prepend|projects|purge|ready|start|stop|summary|tags|undo|unblocked|waiting'
+    function ble/cmdinfo/cmd:task/chroma.wattr {
+        local wtxt=${text:wbeg:wlen} ret
+        if [[ $wtxt =~ ^[a-z][a-z._]*: ]]; then
+            ble/color/gspec2g fg=#bebada
+        elif [[ $wtxt =~ ^($_para_task_commands)$ ]]; then
+            ble/color/gspec2g fg=#fdb462
+        else
+            ble/progcolor/word:default/impl.wattr
+            return
+        fi
+        ble/progcolor/wattr#setg "$wbeg" "$ret"
+        ble/progcolor/wattr#setg "$wend" d
+    }
+    function ble/cmdinfo/cmd:task/chroma {
+        local i "${_ble_syntax_progcolor_vars[@]/%/=}"
+        for ((i = 1; i < ${#comp_words[@]}; i++)); do
+            local ref=${tree_words[i]}
+            [[ $ref ]] || continue
+            local progcolor_iword=$i
+            ble/progcolor/load-word-data "$ref"
+            ble/progcolor/@wattr ble/cmdinfo/cmd:task/chroma.wattr
+        done
+    }
 fi
 
 # Homebrew's task completion defines _task; load it first if bash-completion has not yet.
