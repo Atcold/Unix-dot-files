@@ -13,6 +13,37 @@
 
 # Taskwarrior runs its full info report for IDs alone; the shell turns that into the short views.
 function task {
+    # Apply the ready report's owner default only to report invocations.
+    local arg ready= owner= other=
+    for arg in "$@"; do
+        case $arg in
+            ready) ready=1 ;;
+            rc.*=*|rc:*) ;;
+            *)
+                if [[ $arg =~ (^|[[:space:]\(])(ow|own|owne|owner)(\.[a-z]+)?: ]] ||
+                   [[ $arg =~ (^|[[:space:]\(])owner[[:space:]]*(=|!|~) ]]; then
+                    owner=1
+                elif [[ $arg != *:* && $arg != [+-]* && ! $arg =~ ^[0-9,]+$ ]]; then
+                    other=1
+                fi
+                ;;
+        esac
+    done
+    if [[ $ready ]] && [[ $1 == ready || ! $other ]]; then
+        if [[ $owner ]]; then
+            local -a ready_args=()
+            for arg in "$@"; do
+                case $arg in
+                    ow:bot|own:bot|owne:bot|owner:bot) ready_args+=(owner.any: owner.isnt:alf) ;;
+                    ow:claude|own:claude|owne:claude|owner:claude) ready_args+=(owner.is:claude) ;;
+                    *) ready_args+=("$arg") ;;
+                esac
+            done
+            set -- "${ready_args[@]}"
+        else
+            set -- ow:alf "$@"
+        fi
+    fi
     if (($# == 1)) && [[ $1 =~ ^[0-9]+$ ]]; then
         command task rc.color=off rc.verbose=label rc.journal.info=0 "$1" info |
             awk 'function lab(s) { return sprintf("\033[1;38;2;128;177;211m%-13s\033[0m", s) }
@@ -44,7 +75,18 @@ function task {
                  }'
     elif (($# == 1)) && [[ $1 =~ ^[0-9]+([,-][0-9]+)*$ ]]; then
         command task "$1" card
-    elif [[ -t 1 ]] && ! [[ " $* " =~ \ (add|annotate|append|config|context|delete|denotate|done|duplicate|edit|import|log|modify|prepend|purge|start|stop|sync|undo)\  ]]; then
+    elif [[ -t 1 ]]; then
+        # Taskwarrior accepts command prefixes such as del and mod. Keep their prompts on the terminal.
+        local arg action
+        for arg in "$@"; do
+            [[ $arg =~ ^[a-z][a-z0-9-]*$ ]] || continue
+            for action in add annotate append config context delete denotate done duplicate edit execute import import-v2 log modify prepend purge start stop synchronize undo; do
+                if [[ $action == "$arg"* ]]; then
+                    command task "$@"
+                    return $?
+                fi
+            done
+        done
         # A list on the terminal: keep Taskwarrior's colours and width through the pipe, colour
         # each annotation count [N] cyan, so a task with more to it stands out, set the header
         # in bold blue as task 6's labels with a grey rule under it in place of the dashes, which
@@ -238,7 +280,7 @@ if [[ ${BLE_VERSION-} ]]; then
     # Colours while typing: task's commands (add, modify, done, …) orange and name:value
     # attributes (pro:radio, depends:3) lavender, as in the slides; every other word keeps
     # ble.sh's own colour, so a quoted description stays green.
-    _para_task_commands='add|annotate|append|blocked|blocking|calendar|context|count|delete|denotate|done|duplicate|edit|export|info|list|log|long|ls|minimal|modify|newest|next|oldest|prepend|projects|purge|ready|start|stop|summary|tags|undo|unblocked|waiting'
+    _para_task_commands='add|annotate|append|blocked|blocking|calendar|context|count|del|delete|denotate|done|duplicate|edit|export|info|list|log|long|ls|minimal|modify|newest|next|oldest|prepend|projects|purge|ready|start|stop|summary|tags|undo|unblocked|waiting'
     function ble/cmdinfo/cmd:task/chroma.wattr {
         local wtxt=${text:wbeg:wlen} ret
         if [[ $wtxt =~ ^[a-z][a-z._]*: ]]; then
