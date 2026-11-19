@@ -16,6 +16,7 @@
 - PDFs:
   - Open PDFs with `~/.settings/Scripts/pdf-show a.pdf b.pdf …`: side by side on the screen next to the terminal; by day in Skim, which reloads itself on every rebuild, and after sunset in Preview with dark appearance.
   - I read it myself. After an edit, give the page and a few words only.
+- When taking in Skim comments, save an annotated copy in Scratch before rebuilding. Once the comments are addressed, clear those annotations from the updated PDF and verify that Skim shows the new version without the old comments.
 - PDFs in `~/Dropbox` carry my e-ink annotations:
   - Before overwriting one, compare it with your last copy.
   - To read my feedback, first extract each annotation’s typed note (pymupdf `a.info["content"]`) together with its selected text, using its highlight quadrilaterals. Read each comment alongside that exact passage. Render and inspect pages when the feedback concerns layout or the text extraction leaves the context unclear.
