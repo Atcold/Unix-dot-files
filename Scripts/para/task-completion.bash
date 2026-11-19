@@ -123,9 +123,17 @@ function _para_task_match {
         sort -u
 }
 
+_para_task_show_commands=(next list blocked ready summary info)
+_para_task_change_commands=(add modify annotate start stop done delete)
+
 function _para_task {
     local cur
     _get_comp_words_by_ref -n : cur
+    # Offer common commands first. A typed prefix goes through Taskwarrior's completion.
+    if [[ $COMP_CWORD == 1 && -z $cur ]]; then
+        COMPREPLY=("${_para_task_show_commands[@]}" "${_para_task_change_commands[@]}")
+        return
+    fi
     case $cur in
         pro:*|proj:*|proje:*|projec:*|project:*)
             local IFS=$'\n'
@@ -163,7 +171,57 @@ function _para_task {
 # In ble.sh, the dep: menu shows each task's description beside its ID; every other word
 # goes to the bash completion above.
 if [[ ${BLE_VERSION-} ]]; then
+    # Draw group labels separately from the selectable completion candidates.
+    function ble/complete/menu-style:para-task/construct-page {
+        if ((cols < 25)); then
+            local menu_style=dense-nowrap
+            ble/complete/menu-style:dense-nowrap/construct-page "$@"
+            return
+        fi
+
+        local -a commands=("${_para_task_show_commands[@]}" "${_para_task_change_commands[@]}")
+        local show_count=${#_para_task_show_commands[@]}
+        local index item label command command_width x0 drawn ret
+        end=$begin x=0 y=0 esc=
+        for ((index=begin; index<${#menu_items[@]}; index++)); do
+            ble/complete/menu#check-cancel && return 148
+            item=${menu_items[index]}
+            command=${commands[index]}
+            command_width=${#command}
+            if ((index > begin && (index == show_count || x + 2 + command_width >= cols))); then
+                ((y + 1 < lines)) || break
+                esc+=$'\n'
+                ((x=0, ++y))
+            fi
+            if ((index == begin || index == show_count)); then
+                label='Show tasks:'
+                ((index < show_count)) || label='Change tasks:'
+                esc+=$'\e[1;38;2;128;177;211m'$label$_ble_term_sgr0'  '
+                x=$((${#label} + 2))
+            elif ((x > 0)); then
+                esc+='  '
+                ((x+=2))
+            fi
+            x0=$x
+            ble/complete/menu#render-item "$item"
+            # Keep ble.sh's selection rendering and colour the unselected command.
+            drawn=${ret/"$command"/$'\e[38;2;253;180;98m'$command}
+            _ble_complete_menu_style_icons[index]=$x0,$y,$x,$y,${#item},${#drawn}:$item$drawn
+            esc+=$drawn
+            end=$((index + 1))
+        done
+    }
+
     function ble/cmdinfo/complete:task {
+        if ((comp_cword == 1)) && [[ ! $COMPV ]]; then
+            local candidate flag_source_filter=1
+            bleopt complete_menu_style=para-task
+            ble/complete/cand/yield.initialize word
+            for candidate in "${_para_task_show_commands[@]}" "${_para_task_change_commands[@]}"; do
+                ble/complete/cand/yield word "$candidate"
+            done
+            return 0
+        fi
         if [[ $COMPV =~ ^(dep|depe|depen|depend|depends):([0-9]*)$ ]]; then
             local pre=${BASH_REMATCH[1]}: typed=${BASH_REMATCH[2]} id desc flag_source_filter=1
             bleopt complete_menu_style=desc   # for this menu only: ble.sh scopes it to the source
