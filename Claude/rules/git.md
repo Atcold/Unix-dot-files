@@ -1,5 +1,6 @@
 # Git
 
+- All my repositories use a single branch, `master`. Work on that branch. Ask before changing branches, worktrees, or tags.
 - Pull before any work on a repo (`git pull --ff-only`), and pull again before committing when the work ran long: another session, on this Mac or the other, may have pushed to the same files.
 - Never add Claude attribution: no `Co-Authored-By: Claude …` trailer, no `Claude-Session:` link, no ‘Generated with Claude Code’ line, in commits or PR descriptions. The commit is mine alone.
 - Commit subject: one line, 50–72 characters, the substantive change only (no ‘sentence case fix’); a body only when the diff can’t explain a cross-cutting decision. Abbreviate long project names. Plain `-m "…"`, no heredoc.
