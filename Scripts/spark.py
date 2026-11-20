@@ -283,7 +283,7 @@ def ensure_tunnel(cfg, local, remote):
     open the pipe. -fN backgrounds a connection with no commands: forwarding is its only
     job, and ExitOnForwardFailure makes a lost port fail the ssh instead of idling."""
     if isinstance(tunnel(local), tuple):
-        ok(f"tunnel :{local} already open")
+        ok(f"tunnel {bold(device_name())}:{accent(str(local))} {dim('already open')}")
         return
     r = subprocess.run(["ssh", "-fN", "-o", "ExitOnForwardFailure=yes",
                         "-o", "ServerAliveInterval=30", "-L",
@@ -291,8 +291,8 @@ def ensure_tunnel(cfg, local, remote):
                        capture_output=True, text=True)
     if r.returncode != 0:
         err(f"tunnel: {r.stderr.strip()}")
-    ends = f":{local}" if local == remote else f":{local} → :{remote}"
-    ok(f"tunnel {ends} {green('open')}")
+    pair = f"{bold(device_name())}:{accent(str(local))} {dim('→')} {bold(cfg['host'])}:{accent(str(remote))}"
+    ok(f"tunnel {pair} {green('open')}")
 
 
 def device_name():
@@ -718,7 +718,8 @@ def serve(cfg, model=None, server=None):
         # flight, and running it over a full log replays a check per phase of a
         # start this command never began (what spark serve showed on the phone)
         if model_ready(local):
-            ok(f"{bold(name)} serving on {bold(f':{local}')}, {green('api ready')}")
+            where = f"{bold(device_name())}:{accent(str(local))}"
+            ok(f"{bold(name)} serving on {where}, {green('api ready')}")
             return
         # One line per phase, kept on screen as it completes: the server's own parser turns
         # the log into a percentage and a stage word, and a new phase starts a fresh line.
@@ -848,10 +849,11 @@ def unserve(cfg, model=None, server=None):
         err(unknown_model(cfg, model or cfg["model"], server))
     model, server, local, remote, name = p
     if tunnel_only:
+        pair = f"{bold(device_name())}:{accent(str(local))} {dim('→')} {bold(cfg['host'])}:{accent(str(remote))}"
         if close_tunnel(local):
-            ok(f"tunnel :{local} {red('closed')}")
+            ok(f"tunnel {pair} {red('closed')}")
         else:
-            ok(f"tunnel :{local} already closed")
+            ok(f"tunnel {bold(device_name())}:{accent(str(local))} {dim('already closed')}")
         return
     if not ssh_up(cfg["host"]):
         ok(f"{bold(cfg['host'])} is already down")
@@ -873,7 +875,8 @@ def unserve(cfg, model=None, server=None):
         spec, target = held
         if spec == f"127.0.0.1:{local}:127.0.0.1:{remote}" and target == cfg["host"]:
             close_tunnel(local)  # the pair matched ours, so this is ours to close
-            ok(f"tunnel :{local} {red('closed')}")
+            pair = f"{bold(device_name())}:{accent(str(local))} {dim('→')} {bold(cfg['host'])}:{accent(str(remote))}"
+            ok(f"tunnel {pair} {red('closed')}")
         else:
             ok(f"tunnel :{local} left open: not this service's ({dim(f'-L {spec} → {target}')})")
     elif isinstance(held, str):
