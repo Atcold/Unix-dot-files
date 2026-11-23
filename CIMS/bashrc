@@ -81,8 +81,3 @@ umask 007
 
 # Set up Singularity
 export SINGULARITY_BIND="/misc"
-
-# Setting up Python env
-export PIP_CACHE_DIR=$HOME/atcold/.cache/pip
-export PYTHONUSERBASE=$HOME/atcold/.local/lib/python3.9
-export PATH="$HOME/atcold/.local/lib/python3.9/bin:$PATH"
