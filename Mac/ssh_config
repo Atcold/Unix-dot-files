@@ -22,8 +22,13 @@ Host cims
 
 Host cassio rose* lion* vine* hpc* weaver*
     HostName %h.cs.nyu.edu
+    User ac7181
     ProxyJump cims
     StrictHostKeyChecking no
+
+# The NYU login (NetID), which replaced atcold when CIMS unified its accounts
+Host *.cims.nyu.edu *.cs.nyu.edu
+    User ac7181
 
 Host localhost
     StrictHostKeyChecking no
