@@ -7,6 +7,7 @@ import hashlib
 import mimetypes
 import os
 import re
+import secrets
 import threading
 import time
 import urllib.request
@@ -22,6 +23,26 @@ LOCK = threading.RLock()
 INDEX = []
 TABLETS = {}
 STATE = {'slug': '', 'seq': 0}
+RADIO_KEY = Path.home()/'.local/share/radio/key'
+
+
+def keys():
+    """Keys that open cucina through Funnel: the radio's key, and one per guest in DATA/keys
+    as `name key` lines, re-read on every request so deleting a line shuts that guest out."""
+    found = []
+    try:
+        found.append(RADIO_KEY.read_text().strip())
+    except OSError:
+        pass
+    try:
+        found += [line.split()[-1] for line in (DATA/'keys').read_text().splitlines() if line.strip() and not line.startswith('#')]
+    except OSError:
+        pass
+    return [k for k in found if k]
+
+
+def known(given, valid):
+    return bool(given) and any(secrets.compare_digest(given.encode(), k.encode()) for k in valid)
 
 
 def save(path, value):
@@ -121,9 +142,31 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def locked(self, params):
+        """Tailnet requests pass. A request through Funnel needs a key: given once as ?k=, it
+        comes back as the ck cookie; the radio's rk cookie from the same host works too."""
+        if not (self.headers.get('Tailscale-Funnel-Request') or self.headers.get('X-Forwarded-For')):
+            return False
+        valid = keys()
+        given = params.get('k',[''])[0]
+        if known(given, valid):
+            self.send_response(302)
+            self.send_header('Location', urlparse(self.path).path)
+            self.send_header('Set-Cookie', f'ck={given}; Path=/; Max-Age=315360000; Secure; HttpOnly; SameSite=Lax')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return True
+        cookies = dict(c.strip().split('=',1) for c in self.headers.get('Cookie','').split(';') if '=' in c)
+        if known(cookies.get('ck',''), valid) or known(cookies.get('rk',''), valid):
+            return False
+        self.reply({'error':'Pagina non trovata.'},404)
+        return True
+
     def do_GET(self):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
+        if self.locked(params):
+            return
         try:
             if parsed.path in ('/', '/cook', '/screen'):
                 name = {'/':'page.html','/cook':'cook.html','/screen':'screen.html'}[parsed.path]
@@ -159,6 +202,8 @@ class Handler(BaseHTTPRequestHandler):
             self.reply({'error':str(error)}, 502)
 
     def do_POST(self):
+        if self.locked({}):
+            return
         origin = self.headers.get('Origin')
         if origin and urlparse(origin).netloc != self.headers.get('Host'):
             return self.reply({'error':'Origine non valida.'},403)
