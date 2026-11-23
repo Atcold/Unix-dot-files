@@ -25,10 +25,6 @@ Host cassio rose* lion* vine* hpc* weaver*
     ProxyJump cims
     StrictHostKeyChecking no
 
-Host mybox
-    HostName box795.cims.nyu.edu
-    ProxyJump cims
-
 Host localhost
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null

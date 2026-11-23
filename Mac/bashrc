@@ -47,8 +47,6 @@ function opencode-unpair {
 
 # Mount CIMS on my Mac
 function MountCims {
-    # ssh -L 2222:box795:22 $ACCESS -Nf
-    # sshfs -p 2222 localhost:/ /Volumes/MyBox/
     sshfs cims:/ /Volumes/Cims
 }
 
