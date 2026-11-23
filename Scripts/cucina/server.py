@@ -131,6 +131,39 @@ def get_image(url):
     return content, mimetypes.guess_type(parsed.path)[0] or 'image/jpeg'
 
 
+ICONS = {
+    '/favicon.ico': 'favicon.ico',
+    '/apple-touch-icon.png': 'apple-touch-icon.png',
+    '/apple-touch-icon-precomposed.png': 'apple-touch-icon-precomposed.png',
+    '/icon/16.png': 'style/images/icons/favicon-16x16.png',
+    '/icon/32.png': 'style/images/icons/favicon-32x32.png',
+    '/icon/96.png': 'style/images/icons/favicon-96x96.png',
+    '/icon/180.png': 'style/images/icons/apple-icon-180x180.png',
+    '/icon/192.png': 'style/images/icons/android-icon-192x192.png',
+    '/icon/512.png': 'style/images/icons/favicon-512x512.png',
+}
+
+
+MANIFEST = {
+    'name': 'Cucina', 'short_name': 'Cucina', 'start_url': '/', 'scope': '/',
+    'display': 'standalone', 'background_color': '#ffffff', 'theme_color': '#ffffff',
+    'icons': [{'src': '/icon/192.png', 'sizes': '192x192', 'type': 'image/png'},
+              {'src': '/icon/512.png', 'sizes': '512x512', 'type': 'image/png'}],
+}
+
+
+def get_icon(name):
+    """Giallo Zafferano's own icon, fetched once and cached, so a home-screen shortcut carries it."""
+    path = CACHE/'icons'/name.replace('/','_')
+    if not path.exists():
+        request = urllib.request.Request('https://www.giallozafferano.it/'+name, headers={'User-Agent': recipes.BROWSER_AGENT})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            content = response.read(1024*1024)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    return path.read_bytes(), 'image/x-icon' if name.endswith('.ico') else 'image/png'
+
+
 class Handler(BaseHTTPRequestHandler):
     def reply(self, value, status=200, kind='application/json; charset=utf-8'):
         body = (json.dumps(value, ensure_ascii=False) if isinstance(value, (dict,list)) else value).encode()
@@ -145,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
     def locked(self, params):
         """Tailnet requests pass. A request through Funnel needs a key: given once as ?k=, it
         comes back as the ck cookie; the radio's rk cookie from the same host works too."""
+        if urlparse(self.path).path in (*ICONS, '/manifest.json'):
+            return False
         if not (self.headers.get('Tailscale-Funnel-Request') or self.headers.get('X-Forwarded-For')):
             return False
         valid = keys()
@@ -171,8 +206,10 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path in ('/', '/cook', '/screen'):
                 name = {'/':'page.html','/cook':'cook.html','/screen':'screen.html'}[parsed.path]
                 return self.reply((HERE/name).read_text(), kind='text/html; charset=utf-8')
-            if parsed.path == '/image':
-                content, kind = get_image(params.get('url',[''])[0])
+            if parsed.path == '/manifest.json':
+                return self.reply(json.dumps(MANIFEST), kind='application/manifest+json')
+            if parsed.path in ('/image', *ICONS):
+                content, kind = get_icon(ICONS[parsed.path]) if parsed.path in ICONS else get_image(params.get('url',[''])[0])
                 self.send_response(200)
                 self.send_header('Content-Type', kind)
                 self.send_header('Content-Length', str(len(content)))
