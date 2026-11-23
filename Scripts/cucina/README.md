@@ -20,6 +20,10 @@ The terminal uses a wide search and a narrow coloured preview. ‘Mostra qui’ 
 
 On the server, run `python3 install.py --host 0.0.0.0 --boot`, then `cucina up`. Python 3.10+ and its standard library are sufficient; `fzf` is needed only for the terminal picker. Termux:Boot starts the service after a reboot. `cucina status`, `down`, and `restart` manage the local service; `cucina refresh` updates the running index. Access it over the private network, including Tailscale.
 
+Tailscale Funnel can publish the service on the internet with `tailscale funnel --bg --https=10000 http://127.0.0.1:8082`. Tailnet requests pass as before; a request through Funnel needs a key. The radio’s key in `~/.local/share/radio/key` works, and each guest gets a `name key` line in `~/.local/share/cucina/keys`. A guest opens `/?k=<key>` once and the server answers with a ten-year `ck` cookie; the radio’s `rk` cookie from the same host works too. The keys file is re-read on every request, so deleting a guest’s line shuts that guest out without a restart.
+
+The pages carry GialloZafferano’s icons and a web app manifest, so a shortcut on a phone or tablet shows the GialloZafferano logo. The server fetches the icons from GialloZafferano once, caches them in `~/.cache/cucina/icons/`, and serves them without a key.
+
 `~/.config/cucina/config.json` holds client `url`, server `host`, and `port`; `CUCINA_URL` overrides the client URL. Notes, tablet selection, and logs persist in `~/.local/share/cucina/`. The index, recipes, and proxied photos live in `~/.cache/cucina/`. The installer links these folders into `Dropbox/Apps/cucina/` on Macs; Termux keeps its own copies.
 
 The service refreshes the sitemap daily and caches recipes for seven days, using saved data when the source is unreachable. Search labels come from recipe addresses; cooking cards use original titles. Photos are fetched and cached by the server so the browser loads them from the same host.
