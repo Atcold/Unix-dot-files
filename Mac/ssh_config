@@ -37,4 +37,9 @@ Host localhost
 Host alfdroid
     Port 8022
 
+Host guzdroid
+    HostName guzdroid.tail350166.ts.net
+    Port 8022
+    User hd9
+
 Include ~/.ssh/config.local
