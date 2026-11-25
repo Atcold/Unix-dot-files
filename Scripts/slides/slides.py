@@ -7,7 +7,7 @@ in the shell pane, '% ' a command you type there yourself, '! ' a line of key pr
 (`code` in backticks). The shell pane runs bash with ble.sh in vi mode.
 Keys: Return (run the command, or go to the next slide), b (back), q (quit).
 """
-import re, shutil, subprocess, sys, termios, textwrap, tty
+import os, re, select, shutil, subprocess, sys, termios, textwrap, tty
 
 
 def rgb(h):
@@ -141,8 +141,16 @@ def main():
     tty.setcbreak(fd)
     try:
         draw(slides[i], i, len(slides), state)
+        size = shutil.get_terminal_size()
         while True:
-            k = sys.stdin.read(1)
+            if not select.select([fd], [], [], 0.2)[0]:   # no key: redraw if the pane was resized
+                if shutil.get_terminal_size() != size:
+                    size = shutil.get_terminal_size()
+                    draw(slides[i], i, len(slides), state)
+                continue
+            k = os.read(fd, 1).decode(errors="ignore")
+            if not k:
+                break
             if k == "q":
                 break
             s = slides[i]
