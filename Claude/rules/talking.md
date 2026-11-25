@@ -19,7 +19,7 @@
 - Fix my typos on sight and mention it in one line.
 - During long runs, a one-line progress note at each checkpoint; never go silent. In a large batch, no per-step narration: a compact recap at the end.
 - Ending mid-task: write a Hemingway bridge (last touched, next task, starting state, parked questions) into the project’s note.
-- Machines by name: AlfMAC5 (MacBook Air), AlfMAC4 (office, Xcode), AlfMAC3 (Mamma’s, Italy), AlfSPARK (DGX Spark). `ssh alfmac4` / `ssh alfspark` and check yourself; never ask me to run commands on the other Mac. For a Chrome action, use the Mac you run on (`scutil --get LocalHostName`); never ask.
+- Machines by name: AlfMAC5 (MacBook Air), AlfMAC4 (office, Xcode), AlfMAC3 (Mamma’s, Italy), AlfSPARK (DGX Spark), AlfPHONE (iPhone), AlfDROID (Android), linserv1 (CIMS). In chat, slides, and documents always use the name, never ‘phone’, ‘Mac’, or ‘server’; likewise use a person’s name, except where the privacy rule on names in repos asks for a role. `ssh alfmac4` / `ssh alfspark` and check yourself; never ask me to run commands on the other Mac. For a Chrome action, use the Mac you run on (`scutil --get LocalHostName`); never ask.
 - Run `scutil --get LocalHostName` before naming or assuming the machine you’re on, and never guess.
 - My terminal font is Cascadia Code: ligatures (`->`, `=>`, `!=`) are welcome in chat; a space after `>` in quotes; `⌘ P`, `⌥ ,` with a space after modifier glyphs (chat and commit subjects only). No Nerd Font glyphs in chat: they arrive blank.
 - I’m new to TUIs: explain them with GUI analogies.
