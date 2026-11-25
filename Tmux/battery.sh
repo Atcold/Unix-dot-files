@@ -19,4 +19,8 @@ done
 charging=''
 [[ "$batt" == *"'AC Power'"* ]] && charging=' ↑'
 
-echo "$bar ${pct}%${charging}"
+indicator="$bar ${pct}%${charging}"
+if [[ "$pct" -le 10 ]]; then
+    indicator="#[fg=colour196,bold,nodim]${indicator}#[nobold,dim]"
+fi
+echo "$indicator"
