@@ -88,7 +88,9 @@ def tmux(*args):
 
 
 def at_prompt(pane):
-    return tmux("display", "-p", "-t", pane, "#{pane_current_command}") == "bash"
+    """The pane ends in the two-line prompt, 'user@machine folder' then '$', here or over ssh."""
+    lines = [l for l in tmux("capture-pane", "-p", "-t", pane).splitlines() if l.strip()]
+    return len(lines) > 1 and lines[-1].strip() == "$" and bool(re.match(r"\w+@\w+ ", lines[-2]))
 
 
 def clear_line(pane):
