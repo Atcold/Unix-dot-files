@@ -11,8 +11,6 @@ alias l1='l -1'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 alias tree='tree -C'
-alias weechat="$HOME/local/bin/weechat"
-alias PPUU="conda activate PPUU"
 
 # Highlight numbers when displaying text files
 alias v="grep --colour=always -nTP '(?<![\w\.])[-+]?[0-9]*[\.eE]?\-?[0-9]+|$'"
