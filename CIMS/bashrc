@@ -1,6 +1,9 @@
 # CIMS-only settings, on top of Linux/bashrc (which loads the shared Bash/bashrc)
 source "$HOME/.settings/Linux/bashrc"
 
+# Let less apply the configured man-page colours.
+export GROFF_NO_SGR=1
+
 # Editor #######################################################################
 export EDITOR="vim"
 alias vim='TERM=xterm-256color /usr/bin/vim'
