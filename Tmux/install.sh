@@ -11,6 +11,7 @@ ln -s $(pwd)/tmux.conf $HOME/.tmux.conf
 # Install scripts.
 mkdir -p $HOME/.tmux
 ln -sf $(pwd)/window-name.sh $HOME/.tmux/window-name.sh
+ln -sf $(pwd)/ip.sh $HOME/.tmux/ip.sh
 
 # If on Mac, get also Mac specific settings
 if [[ $(uname) == 'Darwin' ]]; then

@@ -28,6 +28,6 @@ To re-attach: `tmux attach`, then `s` to pick a session.
 ## Status bar
 
 - **Top row**: window list — `•` current window, `◀` last window
-- **Bottom row**: hostname :: session window:pane :: date :: time
+- **Bottom row**: hostname :: local IP → public IP :: session window:pane :: date :: time. The public IP is fetched at most every 5 minutes.
 - **Mac battery**: the charge bar and percentage turn bold bright red at 10% or below.
 - Window names: repo root (if in a git repo), `~` (if home), or current dir — up to 16 chars
