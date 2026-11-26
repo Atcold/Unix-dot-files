@@ -8,5 +8,5 @@ Host github.com
 
 # CIMS's machines behind the access node (cassio, linserv1, the Slurm nodes) run an sshd that
 # predates post-quantum key exchange, so OpenSSH 10 warns on every login
-Host cassio rose* lion* vine* hpc* weaver* *.cs.nyu.edu *.cims.nyu.edu
+Host cassio linserv1 rose* lion* vine* hpc* weaver* *.cs.nyu.edu *.cims.nyu.edu
   WarnWeakCrypto no-pq-kex
