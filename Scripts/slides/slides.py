@@ -4,7 +4,9 @@ Usage: python3 slides.py slides.txt <shell-pane-id> [first-slide]
 Slides are separated by '---'. In a slide, '# ' is the title, '$ ' a command the slideshow runs
 in the shell pane, '% ' a command you type there yourself, '! ' a line of key presses
 ([Tab] draws a key), '> ' a note shown once the command has run, and any other line is text
-(`code` in backticks). The shell pane runs bash with ble.sh in vi mode.
+(`code` in backticks). A line starting with '| ' is drawn as it is, for diagrams. Lines such as
+'@ machine: linserv1, AlfDROID', above the first '---' block or in it, list names by kind (machine,
+program, port, file), and every slide shows them in the colour of their kind. The shell pane runs bash with ble.sh in vi mode.
 Keys: Return (run the command, or go to the next slide), b (back), q (quit).
 """
 import os, re, select, shutil, subprocess, sys, termios, textwrap, tty
@@ -18,21 +20,32 @@ def rgb(h):
 # note and the Tab key green.
 TITLE = "\033[1m" + rgb("#80b1d3")
 CODE, ATTR, DESC, NOTE = rgb("#fdb462"), rgb("#bebada"), rgb("#fccde5"), rgb("#b3de69")
+KINDS = {"machine": rgb("#8dd3c7"), "program": rgb("#fb8072"), "port": rgb("#ffed6f"),
+         "file": rgb("#bebada")}
+NAMES = {}   # name -> kind, from the deck's '@ ' lines
 TAB = "\033[1;7m" + NOTE   # reverse video: drawn as a key cap
 TEXT, DIM, RESET = "\033[0m", "\033[2m", "\033[0m"
 
 
-def prose(lines):
-    """Colour `code spans` orange; a span may run across wrapped lines."""
+def paint(text, base):
+    """Colour the deck's names by kind, returning to base after each."""
+    if not NAMES:
+        return text
+    names = "|".join(re.escape(n) for n in sorted(NAMES, key=len, reverse=True))
+    return re.sub(rf"(?<![\w./~-])(?:{names})(?![\w-]|\.\w)",
+                  lambda m: KINDS[NAMES[m[0]]] + m[0] + base, text)
+
+
+def prose(lines, base=TEXT):
+    """Colour `code spans` orange and names by kind; a span may run across wrapped lines."""
     out, on = [], False
     for line in lines:
-        s = CODE if on else TEXT
-        for ch in line:
-            if ch == "`":
+        s = ""
+        for j, part in enumerate(line.split("`")):
+            if j:
                 on = not on
-                s += CODE if on else TEXT
-            else:
-                s += ch
+            c = CODE if on else base
+            s += c + paint(part, c)
         out.append(s)
     return out
 
@@ -58,7 +71,7 @@ def command(line, width):
             cur, n = "   ", 3
         else:
             cur, n = cur + " ", n + 1
-        cur += c + w + RESET
+        cur += c + (w if c == RESET + DIM else paint(w, c)) + RESET
         n += len(w)
     lines.append(cur)
     return lines
@@ -69,7 +82,10 @@ def parse(path):
     for block in open(path).read().split("\n---\n"):
         s = {"title": "", "text": [], "cmd": None, "type": False, "note": [], "keys": []}
         for line in block.strip().splitlines():
-            if line.startswith("# "):
+            if line.startswith("@ "):
+                kind, _, names = line[2:].partition(":")
+                NAMES.update({n.strip(): kind.strip() for n in names.split(",")})
+            elif line.startswith("# "):
                 s["title"] = line[2:]
             elif line[:2] in ("$ ", "% "):
                 s["cmd"], s["type"] = line[2:], line[0] == "%"
@@ -99,12 +115,25 @@ def clear_line(pane):
     tmux("send-keys", "-t", pane, "i")
 
 
-def draw(s, i, n, state):
-    cols, rows = shutil.get_terminal_size()
-    width = min(cols - 8, 100)
+def is_code(line):
+    """A diagram line, or a line that is one code span."""
+    return line.startswith("| ") or bool(re.fullmatch(r"`[^`]+`", line))
+
+
+def layout(s, width, note):
+    """The slide's lines, with a blank line only between text and code."""
+    text = []
+    for j, line in enumerate(s["text"]):
+        diagram = line.startswith("| ")
+        if j and is_code(line) != is_code(s["text"][j - 1]):
+            text.append("")
+        if diagram:
+            link = line[2:].lstrip().startswith("│")
+            text.append(DIM + line[2:] if link else TEXT + paint(line[2:], TEXT))
+        else:
+            text += prose(textwrap.wrap(line, width))
+    text = [(TEXT, "")] + [("", l) for l in text]
     lines = [(TITLE, s["title"])]
-    wrapped = [w for t in s["text"] for w in textwrap.wrap(t, width)]
-    text = [(TEXT, "")] + [("", w) for w in prose(wrapped)]
     if not s["type"]:
         lines += text   # a slide that runs its command explains it first
     if s["cmd"]:
@@ -117,19 +146,28 @@ def draw(s, i, n, state):
             lines += [("", re.sub(r"\[(\w+)\]", lambda m: TAB + " " + m[1] + " " + RESET, w)) for w in prose(keyed)]
     if s["type"]:
         lines += [(TEXT, ""), (DIM, "What it does:")] + text[1:]   # what to type comes first
-    if state == "ran" and s["note"]:
-        lines += [(TEXT, "")] + [(NOTE, w) for t in s["note"] for w in textwrap.wrap(t, width)]
+    if note and s["note"]:
+        wrapped = [w for t in s["note"] for w in textwrap.wrap(t, width)]
+        lines += [(TEXT, "")] + [("", l) for l in prose(wrapped, NOTE)]
+    return lines
+
+
+def draw(s, i, n, state):
+    cols, rows = shutil.get_terminal_size()
+    width = min(cols - 8, 100)
+    lines = layout(s, width, state == "ran")
     if state == "busy":
         lines += [(TEXT, ""), (NOTE, "The shell pane is not at a prompt. Finish what runs there, then press Return.")]
     if s["cmd"] and not s["type"] and state in ("new", "busy"):
         foot = "Return  run it in the pane below      b  back      q  quit"
     else:
         foot = "Return  next slide      b  back      q  quit"
-    lines += [(TEXT, ""), (DIM, f"{i + 1}/{n}   {foot}")]
     left = " " * max((cols - width) // 2, 1)
-    top = max((rows - len(lines)) // 2, 0)
+    top = max((rows - 1 - len(lines)) // 2, 0)   # the keys take the last row
     sys.stdout.write("\033[2J\033[H\033[?25l" + "\n" * top)
     sys.stdout.write("\n".join(left + c + t + RESET for c, t in lines))
+    keys = f"{i + 1}/{n}   {foot}"[:cols - len(left)]
+    sys.stdout.write(f"\033[{rows};1H" + left + DIM + keys + RESET)
     sys.stdout.flush()
 
 
