@@ -8,6 +8,7 @@
 # Aliases and shortcuts ########################################################
 alias grep='grep --colour=auto'
 if command -v eza >/dev/null; then
+    export EZA_CONFIG_DIR="$HOME/.settings/Eza"  # theme.yml: icons for my own extensions
     alias ls='eza --icons=auto --group-directories-first --sort=extension'
     alias ll='eza -l --icons=auto --git --group-directories-first --sort=extension'
     alias l='eza --icons=auto -F --group-directories-first --sort=extension'

@@ -1,0 +1,4 @@
+extensions:
+  slides:
+    icon:
+      glyph: "\U000F0B78"  # nf-md-card_text_outline: a deck for slides.py
