@@ -5,7 +5,8 @@ Slides are separated by '---'. In a slide, '# ' is the title, '$ ' a command the
 in the shell pane, '% ' a command you type there yourself, '! ' a line of key presses
 ([Tab] draws a key), '> ' a note shown once the command has run, and any other line is text
 (`code` in backticks). A line starting with '| ' is drawn as it is, for diagrams. A slide with no
-'# ' is a title slide: its '| ' lines, such as block letters, are drawn in the title's colour. Lines such as
+'# ' is a title slide: its '| ' lines, such as block letters, and the line under them, the subtitle,
+are drawn in the title's colour. Lines such as
 '@ machine: linserv1, AlfDROID', above the first '---' block or in it, list names by kind (machine,
 program, port, file), and every slide shows them in the colour of their kind. The shell pane runs bash with ble.sh in vi mode.
 Keys: Return (run the command, or go to the next slide), b (back), q (quit).
@@ -133,6 +134,8 @@ def layout(s, width, note):
         elif diagram:
             link = line[2:].lstrip().startswith("│")
             text.append(DIM + line[2:] if link else TEXT + paint(line[2:], TEXT))
+        elif not s["title"] and line == next(l for l in s["text"] if l.strip() and not l.startswith("| ")):
+            text += [TITLE + w + RESET for w in textwrap.wrap(line, width)]   # the subtitle, under the letters
         else:
             text += prose(textwrap.wrap(line, width))
     text = [("", l) for l in text]
