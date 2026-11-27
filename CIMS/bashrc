@@ -1,4 +1,9 @@
-# CIMS-only settings, on top of Linux/bashrc (which loads the shared Bash/bashrc)
+# Load the CIMS login defaults before the shared Linux settings.
+export TERM=screen-256color
+if [ -r /usr/local/lib/.system.bashrc ]; then
+    source /usr/local/lib/.system.bashrc
+fi > /dev/null
+
 source "$HOME/.settings/Linux/bashrc"
 
 # Let less apply the configured man-page colours.
