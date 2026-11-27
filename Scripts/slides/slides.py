@@ -135,7 +135,7 @@ def layout(s, width, note):
             link = line[2:].lstrip().startswith("│")
             text.append(DIM + line[2:] if link else TEXT + paint(line[2:], TEXT))
         elif not s["title"] and line == next(l for l in s["text"] if l.strip() and not l.startswith("| ")):
-            text += [TITLE + w + RESET for w in textwrap.wrap(line, width)]   # the subtitle, under the letters
+            text += [TITLE + w + RESET for w in textwrap.wrap(line, width)] + [""]   # the subtitle, under the letters
         else:
             text += prose(textwrap.wrap(line, width))
     text = [("", l) for l in text]
