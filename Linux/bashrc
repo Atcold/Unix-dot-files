@@ -9,7 +9,8 @@ esac
 # Aliases and shortcuts ########################################################
 alias lsv='ls -vX --color=auto'  # GNU ls with natural version sort
 # Ubuntu ships bat as batcat
-command -v batcat >/dev/null && alias bat='batcat --paging=always'
+unalias bat 2>/dev/null  # an old alias would expand inside the definition below
+command -v batcat >/dev/null && bat() { local a=() x; for x; do [[ $x == -N ]] && x=--style=-numbers; a+=("$x"); done; command batcat --paging=always "${a[@]}"; }  # -N: no line numbers
 
 # Colours ######################################################################
 # Better ls colouring

@@ -20,7 +20,8 @@ alias skim='open -a /Applications/Skim.app'
 alias preview='open -a /Applications/Preview.app'
 alias screen-off='pmset displaysleepnow'
 alias ql='qlmanage -p &>/dev/null'  # brew install syntax-highlight
-alias bat='bat --paging=always'
+unalias bat 2>/dev/null  # an old alias would expand inside the definition below
+bat() { local a=() x; for x; do [[ $x == -N ]] && x=--style=-numbers; a+=("$x"); done; command bat --paging=always "${a[@]}"; }  # -N: no line numbers
 xxd() { if [[ -t 1 ]]; then command xxd -R always "$@"; else command xxd "$@"; fi; }  # colour on screen only
 
 # Claude Code from an SSH shell with token in the keychain
