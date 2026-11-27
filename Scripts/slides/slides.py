@@ -9,7 +9,7 @@ in the shell pane, '% ' a command you type there yourself, '! ' a line of key pr
 are drawn in the title's colour. Lines such as
 '@ machine: linserv1, AlfDROID', above the first '---' block or in it, list names by kind (machine,
 program, port, file), and every slide shows them in the colour of their kind. The shell pane runs bash with ble.sh in vi mode.
-Keys: Return (run the command, or go to the next slide), b (back), q (quit).
+Keys: r (run the slide's command, again if pressed again), n or Return (next slide), b (back), q (quit).
 """
 import os, re, select, shutil, subprocess, sys, termios, textwrap, tty
 
@@ -165,11 +165,12 @@ def draw(s, i, n, state):
     width = min(cols - 8, 100)
     lines = layout(s, width, state == "ran")
     if state == "busy":
-        lines += [(TEXT, ""), (NOTE, "The shell pane is not at a prompt. Finish what runs there, then press Return.")]
-    if s["cmd"] and not s["type"] and state in ("new", "busy"):
-        foot = "Return  run it in the pane below      b  back      q  quit"
+        lines += [(TEXT, ""), (NOTE, "The shell pane is not at a prompt. Finish what runs there, then press r.")]
+    if s["cmd"] and not s["type"]:
+        run = "run again" if state == "ran" else "run below"
+        foot = f"r  {run}      n  next      b  back      q  quit"
     else:
-        foot = "Return  next slide      b  back      q  quit"
+        foot = "n  next      b  back      q  quit"
     left = " " * max((cols - width) // 2, 1)
     top = max((rows - 1 - len(lines)) // 2, 0)   # the keys take the last row
     sys.stdout.write("\033[2J\033[H\033[?25l" + "\n" * top)
@@ -202,16 +203,15 @@ def main():
             s = slides[i]
             if k == "b":
                 i, state = max(i - 1, 0), "new"
-            elif k in "\r\n":
-                if s["cmd"] and not s["type"] and state in ("new", "busy"):
-                    if not at_prompt(pane):
-                        state = "busy"
-                    else:
-                        clear_line(pane)
-                        tmux("send-keys", "-t", pane, s["cmd"], "C-j")
-                        state = "ran"
-                elif i + 1 < len(slides):
-                    i, state = i + 1, "new"
+            elif k == "r" and s["cmd"] and not s["type"]:
+                if not at_prompt(pane):
+                    state = "busy"
+                else:
+                    clear_line(pane)
+                    tmux("send-keys", "-t", pane, s["cmd"], "C-j")
+                    state = "ran"
+            elif k in "n\r\n" and i + 1 < len(slides):   # Return also goes on
+                i, state = i + 1, "new"
             draw(slides[i], i, len(slides), state)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
