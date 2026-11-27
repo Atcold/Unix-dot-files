@@ -1,17 +1,18 @@
-"""Slideshow in a tmux pane, beside a shell pane.
+#!/usr/bin/env python3
+r"""slides: a deck of slides in this tmux pane, its commands run in a shell pane.
 
-Usage: python3 slides.py slides.txt <shell-pane-id> [first-slide]
-Slides are separated by '---'. In a slide, '# ' is the title, '$ ' a command the slideshow runs
-in the shell pane, '% ' a command you type there yourself, '! ' a line of key presses
-([Tab] draws a key), '> ' a note shown once the command has run, and any other line is text
-(`code` in backticks). A line starting with '| ' is drawn as it is, for diagrams. A slide with no
-'# ' is a title slide: its '| ' lines, such as block letters, and the line under them, the subtitle,
-are drawn in the title's colour. Lines such as
-'@ machine: linserv1, AlfDROID', above the first '---' block or in it, list names by kind (machine,
-program, port, file), and every slide shows them in the colour of their kind. The shell pane runs bash with ble.sh in vi mode.
-Keys: r (run the slide's command, again if pressed again), n or Return (next slide), b (back), q (quit).
+Usage: slides deck.slides [first-slide] [%shell-pane]
+
+Without a pane, the panes show their numbers, as after the tmux prefix and q,
+and the one you press is the shell.
+
+Keys: $ runs the slide's command (again if pressed again), n or Return goes
+to the next slide, b goes back, and q quits.
+
+After an edit, pkill -USR1 -f '/slides(\.py)? ' reloads the deck on the same
+slide. The deck format is in README.md, next to this file.
 """
-import os, re, select, shutil, subprocess, sys, termios, textwrap, tty
+import os, re, select, shutil, signal, socket, subprocess, sys, tempfile, termios, textwrap, tty
 
 
 def rgb(h):
@@ -25,8 +26,10 @@ CODE, ATTR, DESC, NOTE = rgb("#fdb462"), rgb("#bebada"), rgb("#fccde5"), rgb("#b
 KINDS = {"machine": rgb("#8dd3c7"), "program": rgb("#fb8072"), "port": rgb("#ffed6f"),
          "file": rgb("#bebada")}
 NAMES = {}   # name -> kind, from the deck's '@ ' lines
-TAB = "\033[1;7m" + NOTE   # reverse video: drawn as a key cap
+TAB = rgb("#bc80bd")   # a key name, such as [Tab] or [Return]: purple
 TEXT, DIM, RESET = "\033[0m", "\033[2m", "\033[0m"
+PROMPT = "\033[1;32m"   # the $ of my bash prompt: bold green
+TYPED = "\033[1m" + rgb("#ffed6f")   # the % of a line you type yourself: bold yellow
 
 
 def paint(text, base):
@@ -52,7 +55,7 @@ def prose(lines, base=TEXT):
     return out
 
 
-def command(line, width):
+def command(line, width, mark="$"):
     """Colour a shell line and wrap it at width: verb orange, name:value purple,
     'description' pink, # comment dim. Continuation lines are indented."""
     code, _, comment = line.partition("  #")
@@ -66,7 +69,7 @@ def command(line, width):
                 words.append((ATTR if attr else CODE, w))
     if comment:
         words += [(RESET + DIM, "#")] + [(RESET + DIM, w) for w in comment.split()]
-    lines, cur, n = [], DIM + "$" + RESET, 1
+    lines, cur, n = [], (PROMPT if mark == "$" else TYPED) + mark + RESET, 1
     for c, w in words:
         if n + 1 + len(w) > width:
             lines.append(cur)
@@ -147,11 +150,11 @@ def layout(s, width, note):
     if s["cmd"]:
         if s["type"]:
             lines += [(TEXT, ""), (DIM, "Type this in the pane below:")]
-        lines += [(TEXT, "")] + [("", l) for l in command(s["cmd"], width)]
+        lines += [(TEXT, "")] + [("", l) for l in command(s["cmd"], width, "%" if s["type"] else "$")]   # % : you type it
         if s["keys"]:
             lines += [(TEXT, "")]
             keyed = [w for t in s["keys"] for w in textwrap.wrap(t, width)]
-            lines += [("", re.sub(r"\[(\w+)\]", lambda m: TAB + " " + m[1] + " " + RESET, w)) for w in prose(keyed)]
+            lines += [("", re.sub(r"(?<!\x1b)\[([^\]\[\x1b]+)\]", lambda m: TAB + m[1] + RESET, w)) for w in prose(keyed)]
     if s["type"]:
         lines += [(TEXT, ""), (DIM, "What it does:")] + text[1:]   # what to type comes first
     if note and s["note"]:
@@ -165,35 +168,84 @@ def draw(s, i, n, state):
     width = min(cols - 8, 100)
     lines = layout(s, width, state == "ran")
     if state == "busy":
-        lines += [(TEXT, ""), (NOTE, "The shell pane is not at a prompt. Finish what runs there, then press r.")]
+        lines += [(TEXT, ""), (NOTE, "The shell pane is not at a prompt. Finish what runs there, then press $.")]
     if s["cmd"] and not s["type"]:
         run = "run again" if state == "ran" else "run below"
-        foot = f"r  {run}      n  next      b  back      q  quit"
+        foot = f"$  {run}      n  next      b  back      q  quit"
     else:
         foot = "n  next      b  back      q  quit"
     left = " " * max((cols - width) // 2, 1)
     top = max((rows - 1 - len(lines)) // 2, 0)   # the keys take the last row
     sys.stdout.write("\033[2J\033[H\033[?25l" + "\n" * top)
     sys.stdout.write("\n".join(left + c + t + RESET for c, t in lines))
-    keys = f"{i + 1}/{n}   {foot}"[:cols - len(left)]
+    page = f"{i + 1}/{n}"
+    keys = foot[:max(cols - 2 * len(left) - len(page) - 3, 0)]
+    keys = keys.replace("$", RESET + PROMPT + "$" + RESET + DIM, 1)   # the run key in the prompt's green
     sys.stdout.write(f"\033[{rows};1H" + left + DIM + keys + RESET)
+    sys.stdout.write(f"\033[{rows};{cols - len(left) - len(page) + 1}H" + DIM + page + RESET)   # the page number at the right
     sys.stdout.flush()
 
 
+def pick_pane():
+    """Show the panes' numbers, as after prefix q, and return the id of the one pressed."""
+    with tempfile.NamedTemporaryFile("r", suffix=".pane") as f:
+        tmux("display-panes", "-d", "0", f"run-shell 'echo %% > {f.name}'")
+        while not open(f.name).read().strip():
+            select.select([], [], [], 0.1)
+        return open(f.name).read().strip()
+
+
+# The help, laid out and coloured like radio's and spark's: name, arguments in grey, what it does
+KEYS = [("$", "Run the slide's command in the shell pane."),
+        ("n", "The next slide. Return too."),
+        ("b", "Back one slide."),
+        ("q", "Quit.")]
+
+
+def usage():
+    tty_ = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    def c(t, code): return f"\033[{code}m{t}\033[0m" if tty_ else t
+    print("\n" + c("slides", "1;35") + c(" — a deck in this tmux pane, its commands in a shell beside it", "2"))
+    print(c("The deck reloads on the same slide after pkill -USR1 -f '/slides(\\.py)? '.", "2"))
+    print("\n" + c("Usage", "1"))
+    print("  " + c("slides", "1;36") + c(" deck.slides [first-slide] [%shell-pane]", "2"))
+    print(c("  Without a pane, the panes show their numbers; press the shell's.", "2"))
+    print("\n" + c("Keys", "1"))
+    for key, what in KEYS:
+        print(f"  {c(key.ljust(4), '1;36')}{what}")
+    print("\n" + c("The deck format is in README.md, next to this script.", "2") + "\n")
+
+
 def main():
-    slides, pane = parse(sys.argv[1]), sys.argv[2]
-    i, state = (int(sys.argv[3]) - 1 if len(sys.argv) > 3 else 0), "new"
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        usage()
+        sys.exit(0)
+    if not os.path.isfile(sys.argv[1]):
+        sys.exit(f"slides: no deck at {sys.argv[1]}")
+    rest = sys.argv[2:]
+    first = next((int(a) for a in rest if a.isdigit()), 1)
+    pane = next((a for a in rest if a.startswith("%")), None) or pick_pane()
+    slides = parse(sys.argv[1])
+    i, state = min(first, len(slides)) - 1, "new"
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     tty.setcbreak(fd)
+    sys.stdout.write(f"\033]2;{os.path.basename(sys.argv[1])}\033\\")   # the pane's title, which its border shows
     try:
         draw(slides[i], i, len(slides), state)
-        size = shutil.get_terminal_size()
+        # Signals wake the loop through a pipe: SIGWINCH when the pane is resized, SIGUSR1 to reload.
+        wake, waker = os.pipe()
+        os.set_blocking(waker, False)
+        signal.set_wakeup_fd(waker)
+        for sig in (signal.SIGWINCH, signal.SIGUSR1):
+            signal.signal(sig, lambda *_: None)
         while True:
-            if not select.select([fd], [], [], 0.2)[0]:   # no key: redraw if the pane was resized
-                if shutil.get_terminal_size() != size:
-                    size = shutil.get_terminal_size()
-                    draw(slides[i], i, len(slides), state)
+            if wake in select.select([fd, wake], [], [])[0]:
+                if signal.SIGUSR1 in os.read(wake, 64):   # the deck was edited: read it again
+                    NAMES.clear()
+                    slides = parse(sys.argv[1])
+                    i = min(i, len(slides) - 1)
+                draw(slides[i], i, len(slides), state)
                 continue
             k = os.read(fd, 1).decode(errors="ignore")
             if not k:
@@ -203,7 +255,7 @@ def main():
             s = slides[i]
             if k == "b":
                 i, state = max(i - 1, 0), "new"
-            elif k == "r" and s["cmd"] and not s["type"]:
+            elif k == "$" and s["cmd"] and not s["type"]:
                 if not at_prompt(pane):
                     state = "busy"
                 else:
@@ -215,6 +267,7 @@ def main():
             draw(slides[i], i, len(slides), state)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(f"\033]2;{socket.gethostname()}\033\\")   # the default title back: the host
         sys.stdout.write("\033[?25h" + RESET + "\n")
 
 
