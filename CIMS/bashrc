@@ -32,8 +32,7 @@ function cv {
 }
 
 # Fix CIMS defaults ############################################################
-unalias mv
-unalias rm
+unalias mv rm 2>/dev/null  # CIMS sets them only in interactive shells
 export PROMPT_COMMAND=""
 
 # NYU and CIMS hosts ###########################################################
